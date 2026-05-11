@@ -1,0 +1,72 @@
+/* ============================================================
+   style.css  –  Savage Tournament Predictor 2026
+   ============================================================ */
+
+body {
+  background-color: #f4f6f5;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* Match card */
+.match-card {
+  border-left: 4px solid #198754;
+  transition: box-shadow 0.15s;
+}
+.match-card:hover {
+  box-shadow: 0 2px 12px rgba(0,0,0,.12);
+}
+.match-card.border-success {
+  border-left-color: #0d6efd;
+  background: #f0fff4;
+}
+
+/* Team name columns in the card */
+.team-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: .85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+/* Score inputs */
+.score-inputs {
+  white-space: nowrap;
+}
+.score-input {
+  width: 52px !important;
+  padding: 4px 4px !important;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.score-input:disabled {
+  background: #e9ecef;
+  cursor: not-allowed;
+}
+
+/* Flag icons */
+.flag-icon {
+  width: 20px;
+  height: 14px;
+  object-fit: cover;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+/* Sticky save bar */
+#save-bar {
+  z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0,0,0,.08);
+}
+
+/* Navbar override */
+.navbar-brand {
+  font-size: 1.1rem;
+}
+
+/* Leaderboard rank column */
+td:first-child {
+  font-size: 1.1rem;
+}

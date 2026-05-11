@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: is the requester an admin?
+    function isAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // Users: readable by all logged-in, writable by self only
+    match /users/{uid} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Username registry: prevent duplicate usernames (write once during registration)
+    match /usernames/{username} {
+      allow read:  if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Matches: readable by all logged-in, writable only by admin
+    match /matches/{matchId} {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // Config / settings: readable by all, writable only by admin
+    match /config/{docId} {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // Predictions: readable by all logged-in (for leaderboard),
+    // writable only by the owner
+    match /predictions/{uid}/matches/{matchId} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /predictions/{uid} {
+      allow read:  if request.auth != null;
+    }
+
+  }
+}
