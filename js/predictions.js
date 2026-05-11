@@ -69,6 +69,7 @@ function renderGroupStage() {
     const matches = groupMatches.filter(m => m.group === grp);
     if (matches.length === 0) continue;
     html += `<div class="col-12"><h5 class="text-white bg-success px-3 py-1 rounded">Group ${grp}</h5></div>`;
+    html += renderGroupStandings(grp, matches);
     for (const m of matches) {
       html += matchCard(m);
     }
@@ -93,6 +94,104 @@ function renderKnockoutStage() {
   }
   container.innerHTML = html;
   attachInputListeners();
+}
+
+function renderGroupStandings(groupName, matches) {
+  const table = new Map();
+
+  const ensureTeam = (name, flag) => {
+    const key = name || 'TBD';
+    if (!table.has(key)) {
+      table.set(key, {
+        team: key,
+        flag: flag || '',
+        p: 0,
+        w: 0,
+        d: 0,
+        l: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        pts: 0
+      });
+    }
+    return table.get(key);
+  };
+
+  for (const match of matches) {
+    const home = ensureTeam(match.homeTeam || 'TBD', match.homeFlag || '');
+    const away = ensureTeam(match.awayTeam || 'TBD', match.awayFlag || '');
+
+    if (!match.finished || match.actualHome === null || match.actualAway === null || match.actualHome === undefined || match.actualAway === undefined) {
+      continue;
+    }
+
+    const homeGoals = Number(match.actualHome);
+    const awayGoals = Number(match.actualAway);
+
+    home.p++; away.p++;
+    home.gf += homeGoals; home.ga += awayGoals;
+    away.gf += awayGoals; away.ga += homeGoals;
+
+    if (homeGoals > awayGoals) {
+      home.w++; home.pts += 3;
+      away.l++;
+    } else if (homeGoals < awayGoals) {
+      away.w++; away.pts += 3;
+      home.l++;
+    } else {
+      home.d++; away.d++;
+      home.pts++; away.pts++;
+    }
+  }
+
+  const standings = Array.from(table.values())
+    .map(t => ({ ...t, gd: t.gf - t.ga }))
+    .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team));
+
+  const rows = standings.map((team, index) => {
+    const flag = team.flag ? `<img src="${escHtml(team.flag)}" class="flag-icon me-1" alt=""/>` : '';
+    return `<tr>
+      <td class="text-muted">${index + 1}</td>
+      <td>${flag}${escHtml(team.team)}</td>
+      <td class="text-center">${team.p}</td>
+      <td class="text-center">${team.w}</td>
+      <td class="text-center">${team.d}</td>
+      <td class="text-center">${team.l}</td>
+      <td class="text-center">${team.gf}</td>
+      <td class="text-center">${team.ga}</td>
+      <td class="text-center">${team.gd}</td>
+      <td class="text-center fw-bold">${team.pts}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="col-12 mb-2">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-2 p-md-3">
+          <div class="small text-muted mb-2">Standings (visual only, based on finished matches)</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Team</th>
+                  <th class="text-center">P</th>
+                  <th class="text-center">W</th>
+                  <th class="text-center">D</th>
+                  <th class="text-center">L</th>
+                  <th class="text-center">GF</th>
+                  <th class="text-center">GA</th>
+                  <th class="text-center">GD</th>
+                  <th class="text-center">Pts</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function matchCard(m) {
