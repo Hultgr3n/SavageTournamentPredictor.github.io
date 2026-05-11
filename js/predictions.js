@@ -6,6 +6,7 @@ let currentUser = null;
 let allMatches   = [];     // array of match objects from Firestore
 let userPreds    = {};     // { matchId: { home, away } }
 let locked       = false;
+let settings     = {};     // settings including lock dates
 
 const GROUP_ORDER    = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 const KNOCKOUT_ORDER = ['round32','round16','qf','sf','final'];
@@ -19,7 +20,7 @@ const KNOCKOUT_LABEL = {
   currentUser = await requireAuth();
   buildNav(currentUser.username, currentUser.isAdmin);
 
-  const settings = await loadSettings();
+  settings = await loadSettings();
   locked = isPredictionLocked(settings);
   if (locked) {
     document.getElementById('lock-banner').classList.remove('d-none');
@@ -85,7 +86,10 @@ function getGroupStandings(groupName) {
   const ensureTeam = (name, flag) => {
     const key = name || 'TBD';
     if (!table.has(key)) {
-      table.set(key, { team: key, flag: flag || '', p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 });
+      table.set(key, {
+        team: key, flag: flag || '', p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0,
+        h2h: {} // Head-to-head vs other teams
+      });
     }
     return table.get(key);
   };
@@ -103,21 +107,63 @@ function getGroupStandings(groupName) {
     home.gf += homeGoals; home.ga += awayGoals;
     away.gf += awayGoals; away.ga += homeGoals;
 
+    // Initialize h2h records if not present
+    if (!home.h2h[away.team]) home.h2h[away.team] = { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+    if (!away.h2h[home.team]) away.h2h[home.team] = { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+
+    home.h2h[away.team].p++; away.h2h[home.team].p++;
+    home.h2h[away.team].gf += homeGoals; home.h2h[away.team].ga += awayGoals;
+    away.h2h[home.team].gf += awayGoals; away.h2h[home.team].ga += homeGoals;
+
     if (homeGoals > awayGoals) {
       home.w++; home.pts += 3;
       away.l++;
+      home.h2h[away.team].w++; home.h2h[away.team].pts += 3;
+      away.h2h[home.team].l++;
     } else if (homeGoals < awayGoals) {
       away.w++; away.pts += 3;
       home.l++;
+      away.h2h[home.team].w++; away.h2h[home.team].pts += 3;
+      home.h2h[away.team].l++;
     } else {
       home.d++; away.d++;
       home.pts++; away.pts++;
+      home.h2h[away.team].d++; home.h2h[away.team].pts++;
+      away.h2h[home.team].d++; away.h2h[home.team].pts++;
     }
   }
 
-  return Array.from(table.values())
-    .map(t => ({ ...t, gd: t.gf - t.ga }))
-    .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team));
+  const standings = Array.from(table.values()).map(t => ({ ...t, gd: t.gf - t.ga }));
+
+  // Sort using FIFA tiebreaker rules
+  standings.sort((a, b) => {
+    // 1. Points
+    if (a.pts !== b.pts) return b.pts - a.pts;
+
+    // For teams tied on points, apply head-to-head tiebreakers
+    const h2hA = a.h2h[b.team];
+    const h2hB = b.h2h[a.team];
+
+    if (h2hA && h2hB) {
+      // 2a. Head-to-head points
+      if (h2hA.pts !== h2hB.pts) return h2hB.pts - h2hA.pts;
+      // 2b. Head-to-head goal difference
+      const h2hGdA = h2hA.gf - h2hA.ga;
+      const h2hGdB = h2hB.gf - h2hB.ga;
+      if (h2hGdA !== h2hGdB) return h2hGdB - h2hGdA;
+      // 2c. Head-to-head goals scored
+      if (h2hA.gf !== h2hB.gf) return h2hB.gf - h2hA.gf;
+    }
+
+    // 3. Overall goal difference
+    if (a.gd !== b.gd) return b.gd - a.gd;
+    // 4. Overall goals scored
+    if (a.gf !== b.gf) return b.gf - a.gf;
+    // 5. Alphabetical (team name as tiebreaker if all else fails)
+    return a.team.localeCompare(b.team);
+  });
+
+  return standings;
 }
 
 function buildQualifiedTeams() {
@@ -174,28 +220,24 @@ function renderBracketPreview() {
   return html;
 }
 
-function renderKnockoutStage() {
-  const container = document.getElementById('knockout-matches');
-  const koMatches = allMatches.filter(m => m.type !== 'group');
+function renderGroupStage() {
+  const container = document.getElementById('group-matches');
+  const groupMatches = allMatches.filter(m => m.type === 'group');
+  if (groupMatches.length === 0) { container.innerHTML = '<div class="col text-muted">No group stage matches yet.</div>'; return; }
 
-  let html = renderBracketPreview();
-
-  if (koMatches.length === 0) {
-    html += '<div class="col text-muted py-3">Knockout matches will appear here as they are scheduled.</div>';
-    container.innerHTML = html;
-    return;
-  }
-
-  for (const stage of KNOCKOUT_ORDER) {
-    const matches = koMatches.filter(m => m.type === stage);
+  let html = '';
+  for (const grp of GROUP_ORDER) {
+    const matches = groupMatches.filter(m => m.group === grp);
     if (matches.length === 0) continue;
-    html += `<div class="col-12"><h5 class="text-white bg-dark px-3 py-1 rounded">${KNOCKOUT_LABEL[stage] || stage}</h5></div>`;
-    for (const m of matches) { html += matchCard(m); }
+    html += `<div class="col-12"><h5 class="text-white bg-success px-3 py-1 rounded">Group ${grp}</h5></div>`;
+    html += renderGroupStandings(grp, matches);
+    for (const m of matches) {
+      html += matchCard(m, 'group');
+    }
   }
   container.innerHTML = html;
   attachInputListeners();
 }
-
 function renderGroupStandings(groupName, matches) {
   const table = new Map();
 
@@ -212,7 +254,8 @@ function renderGroupStandings(groupName, matches) {
         gf: 0,
         ga: 0,
         gd: 0,
-        pts: 0
+        pts: 0,
+        h2h: {}
       });
     }
     return table.get(key);
@@ -294,13 +337,14 @@ function renderGroupStandings(groupName, matches) {
     </div>`;
 }
 
-function matchCard(m) {
+function matchCard(m, stage = null) {
   const pred = userPreds[m.id] || {};
   const predHome = pred.home !== undefined ? pred.home : '';
   const predAway = pred.away !== undefined ? pred.away : '';
   const pts = calcPoints(pred.home, pred.away, m.actualHome, m.actualAway, m.finished);
   const isFinished = !!m.finished;
-  const inputDisabled = locked || isFinished ? 'disabled' : '';
+  const stageLocked = stage ? isPredictionLocked(settings, stage) : locked;
+  const inputDisabled = stageLocked || isFinished ? 'disabled' : '';
 
   // Points badge
   let ptsBadge = '';

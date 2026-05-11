@@ -19,13 +19,20 @@ let adminUser = null;
 // ── Load existing settings ──────────────────────────────
 async function loadCurrentSettings() {
   const settings = await loadSettings();
-  if (settings.lockDate) {
-    // Convert Firestore Timestamp → datetime-local value
-    const d = settings.lockDate.toDate();
-    const pad = n => String(n).padStart(2, '0');
-    document.getElementById('lock-date').value =
+  const pad = n => String(n).padStart(2, '0');
+  
+  if (settings.groupLockDate) {
+    const d = settings.groupLockDate.toDate();
+    document.getElementById('group-lock-date').value =
       `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
+  
+  if (settings.knockoutLockDate) {
+    const d = settings.knockoutLockDate.toDate();
+    document.getElementById('knockout-lock-date').value =
+      `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  
   document.getElementById('locked-toggle').checked = !!settings.locked;
   if (settings.apiToken) {
     document.getElementById('api-token-input').value = settings.apiToken;
@@ -34,12 +41,18 @@ async function loadCurrentSettings() {
 
 // ── Lock settings ───────────────────────────────────────
 async function saveLockSettings() {
-  const dateVal = document.getElementById('lock-date').value;
-  const locked  = document.getElementById('locked-toggle').checked;
-  const update  = { locked };
-  if (dateVal) {
-    update.lockDate = firebase.firestore.Timestamp.fromDate(new Date(dateVal));
+  const groupLockVal    = document.getElementById('group-lock-date').value;
+  const knockoutLockVal = document.getElementById('knockout-lock-date').value;
+  const locked          = document.getElementById('locked-toggle').checked;
+  const update          = { locked };
+  
+  if (groupLockVal) {
+    update.groupLockDate = firebase.firestore.Timestamp.fromDate(new Date(groupLockVal));
   }
+  if (knockoutLockVal) {
+    update.knockoutLockDate = firebase.firestore.Timestamp.fromDate(new Date(knockoutLockVal));
+  }
+  
   await db.collection('config').doc('settings').set(update, { merge: true });
   showToast('Lock settings saved.');
 }

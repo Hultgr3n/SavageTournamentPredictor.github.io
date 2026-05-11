@@ -100,12 +100,24 @@ async function loadSettings() {
   return snap.exists ? snap.data() : {};
 }
 
-/** Returns true if predictions are currently locked (global lock date has passed). */
-function isPredictionLocked(settings) {
-  if (!settings.locked) return false;
+/** Returns true if predictions are currently locked (supports stage-specific locks). */
+function isPredictionLocked(settings, stage = null) {
+  // Global override lock
+  if (settings.locked) return true;
+
+  // Stage-specific locks (group or knockout)
+  if (stage === 'group' && settings.groupLockDate) {
+    return new Date() >= settings.groupLockDate.toDate();
+  }
+  if (stage === 'knockout' && settings.knockoutLockDate) {
+    return new Date() >= settings.knockoutLockDate.toDate();
+  }
+
+  // Legacy support: if old lockDate exists, use it for backward compatibility
   if (settings.lockDate) {
     return new Date() >= settings.lockDate.toDate();
   }
+
   return false;
 }
 
