@@ -54,8 +54,12 @@ async function apiRegister() {
   if (res?.token) {
     document.getElementById('api-token-input').value = res.token;
     document.getElementById('api-token-result').textContent = '✅ Registered & token received!';
+  } else if ((res?.message || '').toLowerCase().includes('already')) {
+    document.getElementById('api-token-result').textContent = 'ℹ️ Account already exists. Trying login...';
+    await apiLogin();
   } else {
-    document.getElementById('api-token-result').textContent = '⚠️ ' + (res?.message || JSON.stringify(res));
+    const msg = res?.message || res?.rawText || `HTTP ${res?.status || 'unknown'} from API`;
+    document.getElementById('api-token-result').textContent = '⚠️ ' + msg;
   }
 }
 
@@ -68,7 +72,8 @@ async function apiLogin() {
     document.getElementById('api-token-input').value = res.token;
     document.getElementById('api-token-result').textContent = '✅ Logged in, token received!';
   } else {
-    document.getElementById('api-token-result').textContent = '⚠️ ' + (res?.message || JSON.stringify(res));
+    const msg = res?.message || res?.rawText || `HTTP ${res?.status || 'unknown'} from API`;
+    document.getElementById('api-token-result').textContent = '⚠️ ' + msg;
   }
 }
 
@@ -235,9 +240,23 @@ async function safeApiFetch(url, method, body, token) {
     if (token) opts.headers['Authorization'] = 'Bearer ' + token;
     if (body)  opts.body = JSON.stringify(body);
     const res = await fetch(url, opts);
-    return await res.json();
+    const text = await res.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { rawText: text };
+    }
+    if (!res.ok) {
+      return {
+        status: res.status,
+        message: data?.message || data?.error || data?.rawText || res.statusText,
+        rawText: data?.rawText || text
+      };
+    }
+    return data;
   } catch (ex) {
     setApiStatus('❌ Network error: ' + ex.message);
-    return null;
+    return { message: 'Network error: ' + ex.message };
   }
 }
