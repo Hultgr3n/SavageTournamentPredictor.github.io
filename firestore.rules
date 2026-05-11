@@ -16,7 +16,9 @@ service cloud.firestore {
 
     // Username registry: prevent duplicate usernames (write once during registration)
     match /usernames/{username} {
-      allow read:  if request.auth != null;
+      // Allow public read so signup can check if a username is already taken
+      // before a user is authenticated.
+      allow read:  if true;
       allow create: if request.auth != null
         && request.resource.data.uid == request.auth.uid;
       allow update, delete: if isAdmin();
