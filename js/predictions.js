@@ -78,14 +78,114 @@ function renderGroupStage() {
   attachInputListeners();
 }
 
+function getGroupStandings(groupName) {
+  const groupMatches = allMatches.filter(m => m.type === 'group' && m.group === groupName);
+  const table = new Map();
+
+  const ensureTeam = (name, flag) => {
+    const key = name || 'TBD';
+    if (!table.has(key)) {
+      table.set(key, { team: key, flag: flag || '', p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 });
+    }
+    return table.get(key);
+  };
+
+  for (const match of groupMatches) {
+    const home = ensureTeam(match.homeTeam || 'TBD', match.homeFlag || '');
+    const away = ensureTeam(match.awayTeam || 'TBD', match.awayFlag || '');
+
+    if (!match.finished || match.actualHome === null || match.actualAway === null) continue;
+
+    const homeGoals = Number(match.actualHome);
+    const awayGoals = Number(match.actualAway);
+
+    home.p++; away.p++;
+    home.gf += homeGoals; home.ga += awayGoals;
+    away.gf += awayGoals; away.ga += homeGoals;
+
+    if (homeGoals > awayGoals) {
+      home.w++; home.pts += 3;
+      away.l++;
+    } else if (homeGoals < awayGoals) {
+      away.w++; away.pts += 3;
+      home.l++;
+    } else {
+      home.d++; away.d++;
+      home.pts++; away.pts++;
+    }
+  }
+
+  return Array.from(table.values())
+    .map(t => ({ ...t, gd: t.gf - t.ga }))
+    .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team));
+}
+
+function buildQualifiedTeams() {
+  const qualifiers = { first: [], second: [], third: [] };
+
+  for (const grp of GROUP_ORDER) {
+    const standings = getGroupStandings(grp);
+    if (standings.length >= 1) qualifiers.first.push(standings[0]);
+    if (standings.length >= 2) qualifiers.second.push(standings[1]);
+    if (standings.length >= 3) qualifiers.third.push(standings[2]);
+  }
+
+  qualifiers.third.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+  const bestThird = qualifiers.third.slice(0, 8);
+
+  return {
+    round32: [
+      ...qualifiers.first,
+      ...qualifiers.second,
+      ...bestThird
+    ].slice(0, 32)
+  };
+}
+
+function renderBracketPreview() {
+  const qualified = buildQualifiedTeams();
+  const r32Teams = qualified.round32;
+
+  if (r32Teams.length === 0) {
+    return '<div class="col-12 text-muted text-center py-3">No teams qualified yet.</div>';
+  }
+
+  let html = '<div class="col-12"><br><h6 class="text-warning">⚽ Bracket Preview (based on current standings)</h6>';
+  html += '<div class="small text-muted mb-3">Top 2 from each group + best 8 third-place teams</div>';
+  html += '<div style="overflow-x: auto; padding: 1rem 0;">';
+  html += '<div style="display: flex; gap: 4rem; min-width: fit-content; font-size: 0.85rem;">';
+
+  // Round of 32 teams
+  html += '<div><h6 class="mb-2">Round of 32</h6>';
+  for (let i = 0; i < r32Teams.length; i += 2) {
+    const team1 = r32Teams[i];
+    const team2 = r32Teams[i + 1];
+    const flag1 = team1.flag ? `<img src="${escHtml(team1.flag)}" class="flag-icon me-1" alt=""/>` : '';
+    const flag2 = team2.flag ? `<img src="${escHtml(team2.flag)}" class="flag-icon me-1" alt=""/>` : '';
+    html += `<div style="border: 1px solid #666; padding: 0.5rem; margin-bottom: 2rem; min-width: 140px; background: #2a2a2a;">`;
+    html += `<div style="padding: 0.25rem 0;">${flag1}<small>${escHtml(team1.team)}</small></div>`;
+    html += `<div style="border-top: 1px solid #555;">﻿</div>`;
+    html += `<div style="padding: 0.25rem 0;">${flag2}<small>${escHtml(team2.team)}</small></div>`;
+    html += `</div>`;
+  }
+  html += '</div>';
+
+  html += '</div></div>';
+  return html;
+}
+
 function renderKnockoutStage() {
   const container = document.getElementById('knockout-matches');
   const koMatches = allMatches.filter(m => m.type !== 'group');
+
+  let html = renderBracketPreview();
+
   if (koMatches.length === 0) {
-    container.innerHTML = '<div class="col text-muted py-3">Knockout matches will appear here once the group stage is complete.</div>';
+    html += '<div class="col text-muted py-3">Knockout matches will appear here as they are scheduled.</div>';
+    container.innerHTML = html;
     return;
   }
-  let html = '';
+
   for (const stage of KNOCKOUT_ORDER) {
     const matches = koMatches.filter(m => m.type === stage);
     if (matches.length === 0) continue;
