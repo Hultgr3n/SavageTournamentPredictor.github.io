@@ -57,6 +57,10 @@ async function apiRegister() {
   } else if ((res?.message || '').toLowerCase().includes('already')) {
     document.getElementById('api-token-result').textContent = 'ℹ️ Account already exists. Trying login...';
     await apiLogin();
+  } else if (res === null || res?.rawText === 'null') {
+    // Some API instances return literal "null" for duplicate/invalid register attempts.
+    document.getElementById('api-token-result').textContent = 'ℹ️ Register returned null. Trying login with the same email/password...';
+    await apiLogin();
   } else {
     const msg = res?.message || res?.rawText || `HTTP ${res?.status || 'unknown'} from API`;
     document.getElementById('api-token-result').textContent = '⚠️ ' + msg;
