@@ -115,3 +115,36 @@ function fmtDate(ts) {
   const d = ts.toDate ? ts.toDate() : new Date(ts);
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+
+/** Format a date string to European format (DD/MM/YYYY). Accepts ISO dates like "2026-05-25" or various date formats. */
+function formatDateToEuropean(dateStr) {
+  if (!dateStr) return '';
+  
+  // Try to parse the date string
+  let date = new Date(dateStr);
+  
+  // If it's an invalid date, try parsing as ISO date string
+  if (isNaN(date.getTime())) {
+    // Try splitting by common separators
+    const parts = dateStr.split(/[-\s]/);
+    if (parts.length >= 3) {
+      try {
+        // Assume YYYY-MM-DD format from API
+        const [year, month, day] = parts.slice(0, 3);
+        date = new Date(year, parseInt(month) - 1, day);
+      } catch {
+        return dateStr; // Return original if parsing fails
+      }
+    } else {
+      return dateStr;
+    }
+  }
+  
+  if (isNaN(date.getTime())) return dateStr;
+  
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  
+  return `${day}/${month}/${year}`;
+}

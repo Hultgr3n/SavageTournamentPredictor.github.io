@@ -122,7 +122,7 @@ function matchCard(m) {
   const awayTeam = m.awayTeam || 'TBD';
   const homeFlag = m.homeFlag ? `<img src="${escHtml(m.homeFlag)}" class="flag-icon me-1" alt=""/>` : '';
   const awayFlag = m.awayFlag ? `<img src="${escHtml(m.awayFlag)}" class="flag-icon ms-1" alt=""/>` : '';
-  const dateStr  = m.date || '';
+  const dateStr  = formatDateToEuropean(m.date || '');
 
   return `
     <div class="col-12 col-md-6 col-xl-4">
