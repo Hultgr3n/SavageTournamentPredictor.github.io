@@ -15,6 +15,51 @@ const KNOCKOUT_LABEL = {
   qf: 'Quarter-Finals', sf: 'Semi-Finals', final: 'Final'
 };
 
+const KNOCKOUT_TEMPLATE = {
+  round32: [
+    { date: 'June 29', city: 'Foxborough', home: 'Winner Group A', away: '3rd Group A/B/C/D/F' },
+    { date: 'June 30', city: 'East Rutherford', home: 'Winner Group I', away: '3rd Group C/D/F/G/H' },
+    { date: 'June 28', city: 'Inglewood', home: 'Runner-up Group A', away: 'Runner-up Group B' },
+    { date: 'June 29', city: 'Guadalupe', home: 'Winner Group F', away: 'Runner-up Group C' },
+    { date: 'July 2', city: 'Toronto', home: 'Runner-up Group K', away: 'Runner-up Group L' },
+    { date: 'July 2', city: 'Inglewood', home: 'Winner Group H', away: 'Runner-up Group J' },
+    { date: 'July 1', city: 'Santa Clara', home: 'Winner Group D', away: '3rd Group B/E/F/I/J' },
+    { date: 'July 1', city: 'Seattle', home: 'Winner Group G', away: '3rd Group A/E/H/I/J' },
+    { date: 'June 29', city: 'Houston', home: 'Winner Group C', away: 'Runner-up Group F' },
+    { date: 'June 30', city: 'Arlington', home: 'Runner-up Group E', away: 'Runner-up Group I' },
+    { date: 'June 30', city: 'Mexico City', home: 'Winner Group A', away: '3rd Group C/E/F/H/I' },
+    { date: 'July 1', city: 'Atlanta', home: 'Winner Group L', away: '3rd Group E/H/I/J/K' },
+    { date: 'July 3', city: 'Miami Gardens', home: 'Winner Group J', away: 'Runner-up Group H' },
+    { date: 'July 3', city: 'Arlington', home: 'Runner-up Group D', away: 'Runner-up Group G' },
+    { date: 'July 2', city: 'Vancouver', home: 'Winner Group B', away: '3rd Group E/F/G/I/J' },
+    { date: 'July 3', city: 'Kansas City', home: 'Winner Group K', away: '3rd Group D/E/I/J/L' }
+  ],
+  round16: [
+    { date: 'July 4', city: 'Philadelphia', home: 'Winner Match 74', away: 'Winner Match 77' },
+    { date: 'July 4', city: 'Houston', home: 'Winner Match 73', away: 'Winner Match 75' },
+    { date: 'July 6', city: 'Arlington', home: 'Winner Match 83', away: 'Winner Match 84' },
+    { date: 'July 6', city: 'Seattle', home: 'Winner Match 81', away: 'Winner Match 82' },
+    { date: 'July 5', city: 'East Rutherford', home: 'Winner Match 76', away: 'Winner Match 78' },
+    { date: 'July 5', city: 'Mexico City', home: 'Winner Match 79', away: 'Winner Match 80' },
+    { date: 'July 7', city: 'Atlanta', home: 'Winner Match 86', away: 'Winner Match 88' },
+    { date: 'July 7', city: 'Vancouver', home: 'Winner Match 85', away: 'Winner Match 87' }
+  ],
+  qf: [
+    { date: 'July 9', city: 'Foxborough', home: 'Winner Match 89', away: 'Winner Match 90' },
+    { date: 'July 10', city: 'Inglewood', home: 'Winner Match 93', away: 'Winner Match 94' },
+    { date: 'July 11', city: 'Miami Gardens', home: 'Winner Match 91', away: 'Winner Match 92' },
+    { date: 'July 11', city: 'Kansas City', home: 'Winner Match 95', away: 'Winner Match 96' }
+  ],
+  sf: [
+    { date: 'July 14', city: 'Arlington', home: 'Winner Match 97', away: 'Winner Match 98' },
+    { date: 'July 15', city: 'Atlanta', home: 'Winner Match 99', away: 'Winner Match 100' }
+  ],
+  final: [
+    { date: 'July 19', city: 'East Rutherford', home: 'Winner Match 101', away: 'Winner Match 102' }
+  ],
+  thirdPlace: { date: 'July 18', city: 'Miami Gardens', home: 'Loser Match 101', away: 'Loser Match 102' }
+};
+
 // ── Bootstrap ─────────────────────────────────────────────
 (async () => {
   currentUser = await requireAuth();
@@ -72,7 +117,7 @@ function renderGroupStage() {
     html += `<div class="col-12"><h5 class="text-white bg-success px-3 py-1 rounded">Group ${grp}</h5></div>`;
     html += renderGroupStandings(grp, matches);
     for (const m of matches) {
-      html += matchCard(m);
+      html += matchCard(m, 'group');
     }
   }
   container.innerHTML = html;
@@ -166,75 +211,70 @@ function getGroupStandings(groupName) {
   return standings;
 }
 
-function buildQualifiedTeams() {
-  const qualifiers = { first: [], second: [], third: [] };
-
-  for (const grp of GROUP_ORDER) {
-    const standings = getGroupStandings(grp);
-    if (standings.length >= 1) qualifiers.first.push(standings[0]);
-    if (standings.length >= 2) qualifiers.second.push(standings[1]);
-    if (standings.length >= 3) qualifiers.third.push(standings[2]);
-  }
-
-  qualifiers.third.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
-  const bestThird = qualifiers.third.slice(0, 8);
-
-  return {
-    round32: [
-      ...qualifiers.first,
-      ...qualifiers.second,
-      ...bestThird
-    ].slice(0, 32)
-  };
+function renderKnockoutTemplateCard(slot, title = '') {
+  const heading = title ? `<div class="small text-muted mb-1">${escHtml(title)}</div>` : '';
+  return `
+    <div class="border rounded bg-dark-subtle p-2 mb-2" style="min-width: 220px;">
+      <div class="small mb-1">${escHtml(slot.date)} – <span class="text-primary">${escHtml(slot.city)}</span></div>
+      ${heading}
+      <div class="border rounded px-2 py-1 mb-1 bg-white">${escHtml(slot.home)}</div>
+      <div class="border rounded px-2 py-1 bg-white">${escHtml(slot.away)}</div>
+    </div>`;
 }
 
-function renderBracketPreview() {
-  const qualified = buildQualifiedTeams();
-  const r32Teams = qualified.round32;
+function renderFullKnockoutTemplate() {
+  let html = '<div class="col-12 mb-3">';
+  html += '<h6 class="text-warning mb-2">⚽ Full Knockout Bracket (potential matchups)</h6>';
+  html += '<div class="small text-muted mb-2">Shows all future paths before teams are confirmed. Placeholders follow official bracket slots.</div>';
+  html += '<div style="overflow-x:auto;">';
+  html += '<div class="d-flex gap-3 align-items-start" style="min-width:1200px;">';
 
-  if (r32Teams.length === 0) {
-    return '<div class="col-12 text-muted text-center py-3">No teams qualified yet.</div>';
+  const columns = [
+    { key: 'round32', label: 'Round of 32' },
+    { key: 'round16', label: 'Round of 16' },
+    { key: 'qf', label: 'Quarterfinals' },
+    { key: 'sf', label: 'Semifinals' },
+    { key: 'final', label: 'Final' }
+  ];
+
+  for (const col of columns) {
+    html += `<div class="flex-grow-1" style="min-width:220px;">`;
+    html += `<div class="text-center fw-semibold mb-2 border rounded py-1 bg-light">${escHtml(col.label)}</div>`;
+    for (const slot of KNOCKOUT_TEMPLATE[col.key]) {
+      html += renderKnockoutTemplateCard(slot);
+    }
+    if (col.key === 'final') {
+      html += '<div class="text-center fw-semibold mb-2 mt-3 border rounded py-1 bg-light">Match for third place</div>';
+      html += renderKnockoutTemplateCard(KNOCKOUT_TEMPLATE.thirdPlace);
+    }
+    html += '</div>';
   }
 
-  let html = '<div class="col-12"><br><h6 class="text-warning">⚽ Bracket Preview (based on current standings)</h6>';
-  html += '<div class="small text-muted mb-3">Top 2 from each group + best 8 third-place teams</div>';
-  html += '<div style="overflow-x: auto; padding: 1rem 0;">';
-  html += '<div style="display: flex; gap: 4rem; min-width: fit-content; font-size: 0.85rem;">';
-
-  // Round of 32 teams
-  html += '<div><h6 class="mb-2">Round of 32</h6>';
-  for (let i = 0; i < r32Teams.length; i += 2) {
-    const team1 = r32Teams[i];
-    const team2 = r32Teams[i + 1];
-    const flag1 = team1.flag ? `<img src="${escHtml(team1.flag)}" class="flag-icon me-1" alt=""/>` : '';
-    const flag2 = team2.flag ? `<img src="${escHtml(team2.flag)}" class="flag-icon me-1" alt=""/>` : '';
-    html += `<div style="border: 1px solid #666; padding: 0.5rem; margin-bottom: 2rem; min-width: 140px; background: #2a2a2a;">`;
-    html += `<div style="padding: 0.25rem 0;">${flag1}<small>${escHtml(team1.team)}</small></div>`;
-    html += `<div style="border-top: 1px solid #555;">﻿</div>`;
-    html += `<div style="padding: 0.25rem 0;">${flag2}<small>${escHtml(team2.team)}</small></div>`;
-    html += `</div>`;
-  }
-  html += '</div>';
-
-  html += '</div></div>';
+  html += '</div></div></div>';
   return html;
 }
 
-function renderGroupStage() {
-  const container = document.getElementById('group-matches');
-  const groupMatches = allMatches.filter(m => m.type === 'group');
-  if (groupMatches.length === 0) { container.innerHTML = '<div class="col text-muted">No group stage matches yet.</div>'; return; }
+function renderKnockoutStage() {
+  const container = document.getElementById('knockout-matches');
+  const koMatches = allMatches.filter(m => m.type !== 'group');
 
-  let html = '';
-  for (const grp of GROUP_ORDER) {
-    const matches = groupMatches.filter(m => m.group === grp);
+  let html = renderFullKnockoutTemplate();
+
+  if (koMatches.length === 0) {
+    html += '<div class="col text-muted py-3">No official knockout fixtures in Firestore yet. Template above shows all possible future matches.</div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  for (const stage of KNOCKOUT_ORDER) {
+    const matches = koMatches.filter(m => m.type === stage);
     if (matches.length === 0) continue;
-    html += `<div class="col-12"><h5 class="text-white bg-success px-3 py-1 rounded">Group ${grp}</h5></div>`;
-    html += renderGroupStandings(grp, matches);
+    html += `<div class="col-12"><h5 class="text-white bg-dark px-3 py-1 rounded">${KNOCKOUT_LABEL[stage] || stage}</h5></div>`;
     for (const m of matches) {
-      html += matchCard(m, 'group');
+      html += matchCard(m, 'knockout');
     }
   }
+
   container.innerHTML = html;
   attachInputListeners();
 }
