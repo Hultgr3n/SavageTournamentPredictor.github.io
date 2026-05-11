@@ -133,7 +133,10 @@ function matchCard(m) {
             ${ptsBadge}
           </div>
           <div class="d-flex align-items-center justify-content-between">
-            <div class="team-name text-end pe-2">${homeFlag}${escHtml(homeTeam)}</div>
+            <div class="team-name text-end pe-2 team-home">
+              ${homeFlag}
+              <span class="team-text">${escHtml(homeTeam)}</span>
+            </div>
             <div class="score-inputs d-flex align-items-center gap-1">
               <input type="number" min="0" max="99" class="form-control score-input text-center"
                      data-match="${m.id}" data-side="home"
@@ -143,7 +146,10 @@ function matchCard(m) {
                      data-match="${m.id}" data-side="away"
                      value="${predAway}" ${inputDisabled} placeholder="-"/>
             </div>
-            <div class="team-name text-start ps-2">${escHtml(awayTeam)}${awayFlag}</div>
+            <div class="team-name text-start ps-2 team-away">
+              ${awayFlag}
+              <span class="team-text">${escHtml(awayTeam)}</span>
+            </div>
           </div>
           ${actualScore}
         </div>
