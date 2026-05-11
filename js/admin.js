@@ -106,7 +106,7 @@ async function initMatchesFromApi() {
 
   // Build team lookup map (id → team object)
   const teams = {};
-  const teamList = Array.isArray(teamsData) ? teamsData : teamsData.data || [];
+  const teamList = extractList(teamsData, ['teams', 'data', 'results', 'items']);
   teamList.forEach(t => { teams[String(t.id)] = t; });
 
   // Map API type → our type
@@ -119,7 +119,7 @@ async function initMatchesFromApi() {
     'final': 'final'
   };
 
-  const gameList = Array.isArray(gamesData) ? gamesData : gamesData.data || [];
+  const gameList = extractList(gamesData, ['games', 'data', 'matches', 'results', 'items']);
   if (gameList.length === 0) { setApiStatus('❌ No games returned from API.'); return; }
 
   setApiStatus(`⏳ Writing ${gameList.length} matches to Firestore…`);
@@ -132,19 +132,22 @@ async function initMatchesFromApi() {
       const homeTeamObj = teams[String(g.home_team_id)] || {};
       const awayTeamObj = teams[String(g.away_team_id)] || {};
       const docRef = db.collection('matches').doc(String(g.id));
+      const actualHome = toMaybeNumber(g.home_score);
+      const actualAway = toMaybeNumber(g.away_score);
+      const finished = toBool(g.finished);
       batch.set(docRef, {
         id:       String(g.id),
-        homeTeam: homeTeamObj.name_en || `Team ${g.home_team_id}`,
-        awayTeam: awayTeamObj.name_en || `Team ${g.away_team_id}`,
+        homeTeam: g.home_team_name_en || homeTeamObj.name_en || `Team ${g.home_team_id}`,
+        awayTeam: g.away_team_name_en || awayTeamObj.name_en || `Team ${g.away_team_id}`,
         homeFlag: homeTeamObj.flag   || '',
         awayFlag: awayTeamObj.flag   || '',
         group:    g.group  || '',
         type:     typeMap[String(g.type).toLowerCase()] || g.type || 'group',
         matchday: Number(g.matchday) || 0,
         date:     g.local_date || '',
-        actualHome: g.home_score !== undefined ? Number(g.home_score) : null,
-        actualAway: g.away_score !== undefined ? Number(g.away_score) : null,
-        finished:   !!g.finished,
+        actualHome,
+        actualAway,
+        finished,
         sortOrder:  Number(g.id) || 0
       }, { merge: false });
     }
@@ -163,21 +166,21 @@ async function syncScoresFromApi() {
   const gamesData = await safeApiFetch(`${API_BASE}/get/games`, 'GET', null, token);
   if (!gamesData) { setApiStatus('❌ Failed to fetch games.'); return; }
 
-  const gameList = Array.isArray(gamesData) ? gamesData : gamesData.data || [];
+  const gameList = extractList(gamesData, ['games', 'data', 'matches', 'results', 'items']);
   let updated = 0;
   const CHUNK = 400;
   for (let i = 0; i < gameList.length; i += CHUNK) {
     const batch = db.batch();
     for (const g of gameList.slice(i, i + CHUNK)) {
       const docRef = db.collection('matches').doc(String(g.id));
-      batch.update(docRef, {
-        actualHome: g.home_score !== undefined ? Number(g.home_score) : null,
-        actualAway: g.away_score !== undefined ? Number(g.away_score) : null,
-        finished:   !!g.finished
-      }).catch(() => {});  // ignore if doc doesn't exist yet
+      batch.set(docRef, {
+        actualHome: toMaybeNumber(g.home_score),
+        actualAway: toMaybeNumber(g.away_score),
+        finished:   toBool(g.finished)
+      }, { merge: true });
       updated++;
     }
-    await batch.commit().catch(() => {});
+    await batch.commit();
   }
   await db.collection('config').doc('settings').set(
     { lastSync: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
@@ -263,4 +266,42 @@ async function safeApiFetch(url, method, body, token) {
     setApiStatus('❌ Network error: ' + ex.message);
     return { message: 'Network error: ' + ex.message };
   }
+}
+
+function extractList(payload, keys) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  for (const key of keys) {
+    if (Array.isArray(payload[key])) return payload[key];
+  }
+  // Some endpoints can wrap one level deeper, e.g. { teams: { teams: [...] } }
+  for (const key of keys) {
+    const nested = payload[key];
+    if (nested && typeof nested === 'object') {
+      for (const nestedKey of keys) {
+        if (Array.isArray(nested[nestedKey])) return nested[nestedKey];
+      }
+    }
+  }
+  return [];
+}
+
+function toBool(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    return v === 'true' || v === '1' || v === 'yes' || v === 'finished';
+  }
+  return false;
+}
+
+function toMaybeNumber(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (v === '' || v === 'null' || v === 'undefined' || v === '-') return null;
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
