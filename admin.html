@@ -38,11 +38,11 @@
 
   <!-- ── 2. API Integration ────────────────────────────── -->
   <div class="card mb-4">
-    <div class="card-header bg-primary text-white fw-bold">🌐 Live Score API (worldcup26.ir)</div>
+    <div class="card-header bg-primary text-white fw-bold">🌐 Live Score API (via Worker proxy)</div>
     <div class="card-body">
       <p class="text-muted small mb-2">
-        The site uses <a href="https://worldcup26.ir" target="_blank">worldcup26.ir</a> for live match data.
-        You need to register once on that API to get a JWT token (valid 84 days).
+        The site uses your proxy <a href="https://resultsapi.philip-hultgren.workers.dev/" target="_blank">resultsapi.philip-hultgren.workers.dev</a> for live match data.
+        You still register/login against the upstream API through this proxy to get a JWT token (valid 84 days).
       </p>
 
       <!-- Step 1: Get token -->

@@ -2,7 +2,7 @@
 //  admin.js  –  Logic for admin.html
 // ============================================================
 
-const API_BASE = 'https://worldcup26.ir';
+const API_BASE = 'https://resultsapi.philip-hultgren.workers.dev';
 let adminUser = null;
 
 (async () => {
