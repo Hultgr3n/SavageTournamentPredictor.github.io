@@ -11,7 +11,7 @@ service cloud.firestore {
     // Users: readable by all logged-in, writable by self only
     match /users/{uid} {
       allow read:  if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && (request.auth.uid == uid || isAdmin());
     }
 
     // Username registry: prevent duplicate usernames (write once during registration)
@@ -40,10 +40,11 @@ service cloud.firestore {
     // writable only by the owner
     match /predictions/{uid}/matches/{matchId} {
       allow read:  if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && (request.auth.uid == uid || isAdmin());
     }
     match /predictions/{uid} {
       allow read:  if request.auth != null;
+      allow write: if isAdmin();
     }
 
   }

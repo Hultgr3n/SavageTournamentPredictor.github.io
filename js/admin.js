@@ -4,6 +4,7 @@
 
 const API_BASE = 'https://resultsapi.philip-hultgren.workers.dev';
 let adminUser = null;
+let removeUserModal = null;
 
 (async () => {
   adminUser = await requireAuth();
@@ -263,10 +264,17 @@ async function loadUsers() {
       <td>${u.completedPredictions}/${totalMatches || 0}</td>
       <td>${u.hasStarted ? (u.isFullyComplete ? '✅ Complete' : '🟡 In progress') : '—'}</td>
       <td>
-        <button class="btn btn-sm btn-outline-${u.isAdmin ? 'danger' : 'success'}"
-                onclick="toggleAdmin('${u.uid}', ${!u.isAdmin})">
-          ${u.isAdmin ? 'Remove Admin' : 'Make Admin'}
-        </button>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-${u.isAdmin ? 'danger' : 'success'}"
+                  onclick="toggleAdmin('${u.uid}', ${!u.isAdmin})">
+            ${u.isAdmin ? 'Remove Admin' : 'Make Admin'}
+          </button>
+          <button class="btn btn-sm btn-outline-danger"
+                  onclick="openRemoveUserModal('${u.uid}', '${escHtml(u.username || '—')}')"
+                  ${u.uid === adminUser.uid ? 'disabled title="You cannot remove your own account."' : ''}>
+            Remove User
+          </button>
+        </div>
       </td>
     </tr>`).join('');
 
@@ -281,6 +289,67 @@ async function toggleAdmin(uid, makeAdmin) {
   await db.collection('users').doc(uid).update({ isAdmin: makeAdmin });
   showToast(`User updated.`);
   loadUsers();
+}
+
+function openRemoveUserModal(uid, username) {
+  document.getElementById('remove-user-uid').value = uid;
+  document.getElementById('remove-user-label').textContent = `${username} (${uid})`;
+
+  if (!removeUserModal) {
+    removeUserModal = new bootstrap.Modal(document.getElementById('remove-user-modal'));
+  }
+  removeUserModal.show();
+}
+
+async function confirmRemoveUser() {
+  const uid = document.getElementById('remove-user-uid').value;
+  if (!uid) return;
+  if (uid === adminUser.uid) {
+    showToast('You cannot remove your own account.', 'warning');
+    return;
+  }
+
+  const userRef = db.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  const username = userSnap.exists ? (userSnap.data()?.username || '') : '';
+
+  const predSnap = await db.collection('predictions').doc(uid).collection('matches').get();
+  if (!predSnap.empty) {
+    const CHUNK = 400;
+    const docs = predSnap.docs;
+    for (let i = 0; i < docs.length; i += CHUNK) {
+      const batch = db.batch();
+      for (const d of docs.slice(i, i + CHUNK)) {
+        batch.delete(d.ref);
+      }
+      await batch.commit();
+    }
+  }
+
+  await db.collection('predictions').doc(uid).delete().catch(() => {});
+
+  if (username) {
+    await db.collection('usernames').doc(String(username).toLowerCase()).delete().catch(() => {});
+  } else {
+    const usernameSnap = await db.collection('usernames').where('uid', '==', uid).get();
+    if (!usernameSnap.empty) {
+      const CHUNK = 400;
+      const docs = usernameSnap.docs;
+      for (let i = 0; i < docs.length; i += CHUNK) {
+        const batch = db.batch();
+        for (const d of docs.slice(i, i + CHUNK)) {
+          batch.delete(d.ref);
+        }
+        await batch.commit();
+      }
+    }
+  }
+
+  await userRef.delete();
+
+  if (removeUserModal) removeUserModal.hide();
+  showToast('User removed.');
+  await loadUsers();
 }
 
 // ── Helpers ─────────────────────────────────────────────
