@@ -87,6 +87,31 @@
     return username.toLowerCase().replace(/[^a-z0-9_\-]/g, '') + '@savage.predictor';
   }
 
+  async function ensureUserProfile(uid, username) {
+    const normalized = username.toLowerCase();
+    const userRef = db.collection('users').doc(uid);
+    const usernameRef = db.collection('usernames').doc(normalized);
+
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      await userRef.set({
+        username,
+        isAdmin: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } else {
+      const existing = userSnap.data() || {};
+      if (!existing.username) {
+        await userRef.set({ username }, { merge: true });
+      }
+    }
+
+    const usernameSnap = await usernameRef.get();
+    if (!usernameSnap.exists) {
+      await usernameRef.set({ uid });
+    }
+  }
+
   async function doLogin(e) {
     e.preventDefault();
     const btn = document.getElementById('login-btn');
@@ -96,10 +121,16 @@
     const username = document.getElementById('login-username').value.trim();
     const password = document.getElementById('login-password').value;
     try {
-      await auth.signInWithEmailAndPassword(usernameToEmail(username), password);
+      const cred = await auth.signInWithEmailAndPassword(usernameToEmail(username), password);
+      await ensureUserProfile(cred.user.uid, username);
       // onAuthStateChanged will redirect
     } catch (ex) {
-      err.textContent = 'Invalid username or password.';
+      const code = ex?.code || '';
+      if (code.includes('auth/')) {
+        err.textContent = 'Invalid username or password.';
+      } else {
+        err.textContent = 'Login succeeded, but profile sync failed. Check Firestore rules.';
+      }
       err.classList.remove('d-none');
       btn.disabled = false; btn.textContent = 'Login';
     }
@@ -127,15 +158,8 @@
         return;
       }
       const cred = await auth.createUserWithEmailAndPassword(usernameToEmail(username), password);
-      // Store user profile
-      const batch = db.batch();
-      batch.set(db.collection('users').doc(cred.user.uid), {
-        username,
-        isAdmin: false,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      batch.set(db.collection('usernames').doc(username.toLowerCase()), { uid: cred.user.uid });
-      await batch.commit();
+      await cred.user.getIdToken(true);
+      await ensureUserProfile(cred.user.uid, username);
       // onAuthStateChanged will redirect
     } catch (ex) {
       err.textContent = ex.message || 'Registration failed.';
