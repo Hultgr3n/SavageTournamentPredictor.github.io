@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Match ID Lookup – Admin</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+  <link rel="stylesheet" href="css/style.css"/>
+  <style>
+    .match-card {
+      padding: 12px;
+      margin-bottom: 10px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .match-card:hover {
+      background-color: #e9ecef;
+      border-color: #0d6efd;
+    }
+    .match-id {
+      background: #0d6efd;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 14px;
+      display: inline-block;
+      margin-right: 10px;
+    }
+    .match-status {
+      font-size: 12px;
+      margin-top: 5px;
+    }
+    .status-finished {
+      color: #198754;
+      font-weight: bold;
+    }
+    .status-pending {
+      color: #ffc107;
+      font-weight: bold;
+    }
+    .match-teams {
+      font-size: 16px;
+      font-weight: 500;
+    }
+    .match-score {
+      font-size: 18px;
+      font-weight: bold;
+      color: #198754;
+      margin-top: 5px;
+    }
+    .filter-bar {
+      background: white;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .table-group {
+      margin-bottom: 30px;
+    }
+    .group-header {
+      background: #0d6efd;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      font-weight: bold;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-nav"></div>
+
+  <div class="container-fluid py-4">
+    <h2 class="mb-4">📋 Match ID Lookup Tool</h2>
+
+    <div class="filter-bar">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Filter by Team</label>
+          <input type="text" id="team-filter" class="form-control" placeholder="e.g. USA, France..."/>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Filter by Stage</label>
+          <select id="stage-filter" class="form-select">
+            <option value="">All Stages</option>
+            <option value="group">Group Stage</option>
+            <option value="round32">Round of 32</option>
+            <option value="round16">Round of 16</option>
+            <option value="qf">Quarter-Finals</option>
+            <option value="sf">Semi-Finals</option>
+            <option value="final">Final</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Status</label>
+          <select id="status-filter" class="form-select">
+            <option value="">All Matches</option>
+            <option value="finished">Finished Only</option>
+            <option value="pending">Pending Only</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-2">
+        <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
+        <button class="btn btn-outline-secondary" onclick="resetFilters()">Reset</button>
+      </div>
+    </div>
+
+    <div id="matches-container"></div>
+    <div id="no-results" class="alert alert-info d-none">No matches found. Try adjusting your filters.</div>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    let allMatches = [];
+    let filteredMatches = [];
+
+    (async () => {
+      const user = await requireAuth();
+      const snap = await db.collection('users').doc(user.uid).get();
+      const userData = snap.data() || {};
+      
+      if (!userData.isAdmin) {
+        alert('Access denied. Admins only.');
+        window.location.href = 'predictions.html';
+        return;
+      }
+
+      buildNav(user.username, true);
+      await loadMatches();
+      applyFilters();
+    })();
+
+    async function loadMatches() {
+      const snap = await db.collection('matches').orderBy('sortOrder').get().catch(() =>
+        db.collection('matches').get());
+      allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      console.log(`Loaded ${allMatches.length} matches`);
+    }
+
+    function applyFilters() {
+      const teamFilter = document.getElementById('team-filter').value.toLowerCase().trim();
+      const stageFilter = document.getElementById('stage-filter').value;
+      const statusFilter = document.getElementById('status-filter').value;
+
+      filteredMatches = allMatches.filter(m => {
+        // Team filter
+        if (teamFilter && 
+            !m.homeTeam.toLowerCase().includes(teamFilter) &&
+            !m.awayTeam.toLowerCase().includes(teamFilter)) {
+          return false;
+        }
+        // Stage filter
+        if (stageFilter && m.type !== stageFilter) {
+          return false;
+        }
+        // Status filter
+        if (statusFilter === 'finished' && !m.finished) return false;
+        if (statusFilter === 'pending' && m.finished) return false;
+        return true;
+      });
+
+      renderMatches();
+    }
+
+    function resetFilters() {
+      document.getElementById('team-filter').value = '';
+      document.getElementById('stage-filter').value = '';
+      document.getElementById('status-filter').value = '';
+      filteredMatches = allMatches;
+      renderMatches();
+    }
+
+    function renderMatches() {
+      const container = document.getElementById('matches-container');
+      const noResults = document.getElementById('no-results');
+
+      if (filteredMatches.length === 0) {
+        container.innerHTML = '';
+        noResults.classList.remove('d-none');
+        return;
+      }
+
+      noResults.classList.add('d-none');
+
+      // Group by type
+      const grouped = {};
+      filteredMatches.forEach(m => {
+        if (!grouped[m.type]) grouped[m.type] = [];
+        grouped[m.type].push(m);
+      });
+
+      // Sort groups
+      const typeOrder = ['group', 'round32', 'round16', 'qf', 'sf', 'final'];
+      const typeLabels = {
+        'group': '📋 Group Stage',
+        'round32': '🏆 Round of 32',
+        'round16': '🏆 Round of 16',
+        'qf': '🏆 Quarter-Finals',
+        'sf': '🏆 Semi-Finals',
+        'final': '🏆 Final'
+      };
+
+      let html = '';
+      typeOrder.forEach(type => {
+        if (!grouped[type]) return;
+        html += `<div class="table-group">
+          <div class="group-header">${typeLabels[type] || type}</div>`;
+        
+        grouped[type].forEach(m => {
+          const flag = (team) => {
+            const flagMap = {
+              'USA': '🇺🇸', 'Mexico': '🇲🇽', 'Canada': '🇨🇦',
+              'France': '🇫🇷', 'England': '🇬🇧', 'Germany': '🇩🇪',
+              'Spain': '🇪🇸', 'Italy': '🇮🇹', 'Argentina': '🇦🇷',
+              'Brazil': '🇧🇷', 'Uruguay': '🇺🇾', 'Chile': '🇨🇱'
+            };
+            return flagMap[team] || '';
+          };
+
+          const scoreDisplay = m.finished 
+            ? `<div class="match-score">${m.actualHome} - ${m.actualAway}</div>`
+            : `<div class="match-status status-pending">⏳ Pending</div>`;
+
+          html += `
+            <div class="match-card" onclick="copyId('${m.id}')">
+              <div>
+                <span class="match-id">#${m.id}</span>
+                ${m.type === 'group' ? `<span style="font-size: 12px; color: #666;">Group ${m.group}</span>` : ''}
+              </div>
+              <div class="match-teams">
+                ${flag(m.homeTeam)} <strong>${m.homeTeam}</strong> vs ${flag(m.awayTeam)} <strong>${m.awayTeam}</strong>
+              </div>
+              ${scoreDisplay}
+              <div class="match-status">📅 ${m.date || 'Date TBA'}</div>
+            </div>
+          `;
+        });
+        html += '</div>';
+      });
+
+      container.innerHTML = html;
+    }
+
+    function copyId(id) {
+      navigator.clipboard.writeText(id);
+      showToast(`Copied match ID: ${id}`, 'success');
+    }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scoring System Test Suite</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    .test-section {
+      margin: 30px 0;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .test-group {
+      margin: 15px 0;
+      padding: 15px;
+      border-left: 4px solid #007bff;
+      background-color: #f8f9fa;
+    }
+    .test-case {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    .pass {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .fail {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    .summary {
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .summary.all-pass {
+      background-color: #d4edda;
+      color: #155724;
+      border: 2px solid #28a745;
+    }
+    .summary.has-fail {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 2px solid #dc3545;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 20px 0;
+    }
+    .stat-box {
+      background: white;
+      padding: 15px;
+      border-radius: 4px;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .stat-number {
+      font-size: 28px;
+      font-weight: bold;
+      color: #007bff;
+    }
+    .stat-label {
+      color: #666;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>⚽ Savage Predictor – Scoring System Test Suite</h1>
+  
+  <div id="results"></div>
+
+  <script src="js/app.js"></script>
+  <script>
+    // Test framework
+    class TestSuite {
+      constructor(name) {
+        this.name = name;
+        this.tests = [];
+        this.passed = 0;
+        this.failed = 0;
+      }
+
+      assert(description, actual, expected) {
+        const pass = actual === expected;
+        this.tests.push({ description, actual, expected, pass });
+        if (pass) this.passed++; else this.failed++;
+        return pass;
+      }
+
+      render() {
+        const testCases = this.tests.map(t => `
+          <div class="test-case ${t.pass ? 'pass' : 'fail'}">
+            ${t.pass ? '✅' : '❌'} ${t.description}
+            <br><small>Expected: ${t.expected}, Got: ${t.actual}</small>
+          </div>
+        `).join('');
+
+        return `
+          <div class="test-group">
+            <strong>${this.name}</strong> (${this.passed}/${this.tests.length} passed)
+            ${testCases}
+          </div>
+        `;
+      }
+    }
+
+    // Initialize test results container
+    const resultsDiv = document.getElementById('results');
+    let allSuites = [];
+
+    // ===== TEST SUITE 1: Perfect Predictions =====
+    let suite1 = new TestSuite('Perfect Predictions');
+    suite1.assert(
+      'Perfect match (2-1 prediction, 2-1 actual)', 
+      calcPoints(2, 1, 2, 1, true),
+      3
+    );
+    suite1.assert(
+      'Perfect draw (1-1 prediction, 1-1 actual)', 
+      calcPoints(1, 1, 1, 1, true),
+      3
+    );
+    suite1.assert(
+      'Perfect 0-0 (0-0 prediction, 0-0 actual)', 
+      calcPoints(0, 0, 0, 0, true),
+      3
+    );
+    allSuites.push(suite1);
+
+    // ===== TEST SUITE 2: Partial Matches =====
+    let suite2 = new TestSuite('Partial Matches');
+    suite2.assert(
+      'Only home score correct (pred 2-1, actual 2-2)', 
+      calcPoints(2, 1, 2, 2, true),
+      1
+    );
+    suite2.assert(
+      'Away score + outcome correct (pred 2-1, actual 3-1)', 
+      calcPoints(2, 1, 3, 1, true),
+      2
+    );
+    suite2.assert(
+      'Home & away correct but outcome matches (pred 2-1, actual 2-1)', 
+      calcPoints(2, 1, 2, 1, true),
+      3
+    );
+    suite2.assert(
+      'Only outcome correct, both scores wrong (pred 2-1, actual 3-0)', 
+      calcPoints(2, 1, 3, 0, true),
+      1
+    );
+    suite2.assert(
+      'Only home score correct, different outcome (pred 2-2, actual 2-1)', 
+      calcPoints(2, 2, 2, 1, true),
+      1
+    );
+    allSuites.push(suite2);
+
+    // ===== TEST SUITE 3: Wrong Predictions =====
+    let suite3 = new TestSuite('Wrong Predictions');
+    suite3.assert(
+      'Completely wrong prediction (pred 2-1, actual 3-0)', 
+      calcPoints(2, 1, 3, 0, true),
+      1
+    );
+    suite3.assert(
+      'Wrong outcome same scores (pred 2-1, actual 1-2)', 
+      calcPoints(2, 1, 1, 2, true),
+      0
+    );
+    suite3.assert(
+      'All wrong (pred 0-0, actual 3-3 draw matches outcome)', 
+      calcPoints(0, 0, 3, 3, true),
+      1
+    );
+    allSuites.push(suite3);
+
+    // ===== TEST SUITE 4: Edge Cases =====
+    let suite4 = new TestSuite('Edge Cases');
+    suite4.assert(
+      'Match not finished (finished = false)', 
+      calcPoints(2, 1, 2, 1, false),
+      null
+    );
+    suite4.assert(
+      'Match not finished (predicted but no actual result)', 
+      calcPoints(2, 1, null, null, false),
+      null
+    );
+    suite4.assert(
+      'No prediction made (pred = null)', 
+      calcPoints(null, 1, 2, 1, true),
+      null
+    );
+    suite4.assert(
+      'No prediction made (pred = undefined)', 
+      calcPoints(undefined, 1, 2, 1, true),
+      null
+    );
+    suite4.assert(
+      'Null actual result (actHome = null)', 
+      calcPoints(2, 1, null, 1, true),
+      null
+    );
+    suite4.assert(
+      'String numbers (pred "2" and "1", actual 2 and 1 - should work)', 
+      calcPoints("2", "1", 2, 1, true),
+      3
+    );
+    allSuites.push(suite4);
+
+    // ===== TEST SUITE 5: High Scoring Matches =====
+    let suite5 = new TestSuite('High Scoring Matches');
+    suite5.assert(
+      'Correct high score (pred 5-3, actual 5-3)', 
+      calcPoints(5, 3, 5, 3, true),
+      3
+    );
+    suite5.assert(
+      'Partially correct high score (pred 5-3, actual 5-2)', 
+      calcPoints(5, 3, 5, 2, true),
+      2
+    );
+    suite5.assert(
+      'Wrong outcome high score (pred 5-3, actual 3-5)', 
+      calcPoints(5, 3, 3, 5, true),
+      0
+    );
+    allSuites.push(suite5);
+
+    // ===== TEST SUITE 6: Outcome Logic Validation =====
+    let suite6 = new TestSuite('Outcome Logic (W/D/L)');
+    suite6.assert(
+      'Home win prediction correct (pred 3-1, actual 4-2)', 
+      calcPoints(3, 1, 4, 2, true),
+      1
+    );
+    suite6.assert(
+      'Away win prediction correct (pred 1-3, actual 2-4)', 
+      calcPoints(1, 3, 2, 4, true),
+      1
+    );
+    suite6.assert(
+      'Draw prediction correct (pred 2-2, actual 3-3)', 
+      calcPoints(2, 2, 3, 3, true),
+      1
+    );
+    suite6.assert(
+      'Flip from home win to away win (pred 2-1, actual 1-2)', 
+      calcPoints(2, 1, 1, 2, true),
+      0
+    );
+    suite6.assert(
+      'Flip from draw to home win (pred 2-2, actual 3-1)', 
+      calcPoints(2, 2, 3, 1, true),
+      0
+    );
+    allSuites.push(suite6);
+
+    // Render all test results
+    let totalPassed = 0;
+    let totalFailed = 0;
+    let html = '<div class="test-section">';
+    
+    allSuites.forEach(suite => {
+      html += suite.render();
+      totalPassed += suite.passed;
+      totalFailed += suite.failed;
+    });
+
+    html += `
+      <div class="summary ${totalFailed === 0 ? 'all-pass' : 'has-fail'}">
+        ${totalFailed === 0 ? '✅ ALL TESTS PASSED!' : '❌ SOME TESTS FAILED'}
+      </div>
+      
+      <div class="stats">
+        <div class="stat-box">
+          <div class="stat-number">${totalPassed}</div>
+          <div class="stat-label">PASSED</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number">${totalFailed}</div>
+          <div class="stat-label">FAILED</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number">${totalPassed + totalFailed}</div>
+          <div class="stat-label">TOTAL TESTS</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number">${totalFailed === 0 ? '100' : Math.round((totalPassed / (totalPassed + totalFailed)) * 100)}%</div>
+          <div class="stat-label">SUCCESS RATE</div>
+        </div>
+      </div>
+    </div>`;
+
+    resultsDiv.innerHTML = html;
+  </script>
+</body>
+</html>
