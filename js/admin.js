@@ -220,11 +220,48 @@ async function loadUsers() {
   const snap = await db.collection('users').get();
   const users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
 
-  const rows = users.map(u => `
+  const matchSnap = await db.collection('matches').get();
+  const totalMatches = matchSnap.size;
+
+  const usersWithStats = await Promise.all(users.map(async (u) => {
+    const predSnap = await db.collection('predictions').doc(u.uid).collection('matches').get();
+    const totalPredictions = predSnap.size;
+    let completedPredictions = 0;
+
+    predSnap.forEach((doc) => {
+      const p = doc.data() || {};
+      if (p.home !== null && p.away !== null && p.home !== undefined && p.away !== undefined && p.home !== '' && p.away !== '') {
+        completedPredictions++;
+      }
+    });
+
+    return {
+      ...u,
+      totalPredictions,
+      completedPredictions,
+      hasStarted: totalPredictions > 0,
+      isFullyComplete: totalMatches > 0 && completedPredictions >= totalMatches
+    };
+  }));
+
+  const startedCount = usersWithStats.filter(u => u.hasStarted).length;
+  const completedCount = usersWithStats.filter(u => u.isFullyComplete).length;
+
+  document.getElementById('users-summary').innerHTML = `
+    <div class="alert alert-info mb-0">
+      <strong>Accounts:</strong> ${usersWithStats.length}
+      &nbsp;|&nbsp; <strong>Started predictions:</strong> ${startedCount}
+      &nbsp;|&nbsp; <strong>Completed all matches:</strong> ${completedCount}
+      &nbsp;|&nbsp; <strong>Total matches loaded:</strong> ${totalMatches}
+    </div>`;
+
+  const rows = usersWithStats.map(u => `
     <tr>
       <td>${escHtml(u.username || '—')}</td>
       <td>${escHtml(u.uid)}</td>
       <td>${u.isAdmin ? '✅ Admin' : 'User'}</td>
+      <td>${u.completedPredictions}/${totalMatches || 0}</td>
+      <td>${u.hasStarted ? (u.isFullyComplete ? '✅ Complete' : '🟡 In progress') : '—'}</td>
       <td>
         <button class="btn btn-sm btn-outline-${u.isAdmin ? 'danger' : 'success'}"
                 onclick="toggleAdmin('${u.uid}', ${!u.isAdmin})">
@@ -235,7 +272,7 @@ async function loadUsers() {
 
   document.getElementById('users-table').innerHTML = `
     <table class="table table-sm">
-      <thead><tr><th>Username</th><th>UID</th><th>Role</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Username</th><th>UID</th><th>Role</th><th>Predictions</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
