@@ -48,39 +48,23 @@
 
   <!-- ── 2. API Integration ────────────────────────────── -->
   <div class="card mb-4">
-    <div class="card-header bg-primary text-white fw-bold">🌐 Live Score API (via Worker proxy)</div>
+    <div class="card-header bg-primary text-white fw-bold">🌐 WC2026 API</div>
     <div class="card-body">
       <p class="text-muted small mb-2">
-        The site uses your proxy <a href="https://resultsapi.philip-hultgren.workers.dev/" target="_blank">resultsapi.philip-hultgren.workers.dev</a> for live match data.
-        You still register/login against the upstream API through this proxy to get a JWT token (valid 84 days).
+        Paste your WC2026 API bearer key from <a href="https://api.wc2026api.com/docs" target="_blank">api.wc2026api.com/docs</a>.
+        The site will use it to sync teams, fixtures, and live scores.
       </p>
 
-      <!-- Step 1: Get token -->
-      <div class="border rounded p-3 mb-3">
-        <h6>Step 1 – Get API Token (one-time setup)</h6>
-        <div class="row g-2">
-          <div class="col-md-4"><input type="text"     id="api-name"     class="form-control" placeholder="Your name"/></div>
-          <div class="col-md-4"><input type="email"    id="api-email"    class="form-control" placeholder="Email (for API account)"/></div>
-          <div class="col-md-4"><input type="password" id="api-password" class="form-control" placeholder="Password"/></div>
-        </div>
-        <div class="mt-2 d-flex gap-2">
-          <button class="btn btn-outline-primary btn-sm" onclick="apiRegister()">Register on API</button>
-          <button class="btn btn-primary btn-sm" onclick="apiLogin()">Login to API → Get Token</button>
-        </div>
-        <div id="api-token-result" class="mt-2 text-success small"></div>
-      </div>
-
-      <!-- Step 2: Store token -->
       <div class="row g-2 mb-3">
         <div class="col">
-          <label class="form-label">Stored API Token (paste here if you already have one)</label>
-          <textarea id="api-token-input" class="form-control font-monospace" rows="2" placeholder="eyJhbGciOiJIUzI1NiIsIn..."></textarea>
+          <label class="form-label">Stored API Key / Bearer Token</label>
+          <textarea id="api-token-input" class="form-control font-monospace" rows="2" placeholder="Paste your WC2026 API key here..."></textarea>
         </div>
       </div>
       <div class="d-flex gap-2 flex-wrap">
-        <button class="btn btn-outline-secondary" onclick="saveApiToken()">💾 Save Token</button>
-        <button class="btn btn-outline-success" onclick="initMatchesFromApi()">📥 Initialize All Matches from API</button>
-        <button class="btn btn-success" onclick="syncScoresFromApi()">🔄 Sync Live Scores from API</button>
+        <button class="btn btn-outline-secondary" onclick="saveApiToken()">💾 Save API Key</button>
+        <button class="btn btn-outline-success" onclick="initMatchesFromApi()">📥 Initialize Fixtures from API</button>
+        <button class="btn btn-success" onclick="syncScoresFromApi()">🔄 Sync Fixtures and Scores</button>
       </div>
       <div id="api-status" class="mt-2 small text-muted"></div>
     </div>

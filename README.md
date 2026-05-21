@@ -12,7 +12,7 @@ A lightweight family & friends World Cup 2026 prediction game. Users predict mat
 | Database | **Firebase Firestore** | Free tier, real-time, no server needed |
 | Auth | **Firebase Authentication** | Email/password (shown to users as username only) |
 | Hosting | Any static host (Netlify, GitHub Pages, Vercel, Firebase Hosting) | Just upload the files |
-| Live Scores API | [worldcup26.ir](https://worldcup26.ir) | Free World Cup 2026 REST API |
+| WC2026 API | [api.wc2026api.com](https://api.wc2026api.com/docs) | Free World Cup 2026 REST API |
 
 ---
 
@@ -73,14 +73,14 @@ firebase deploy
 ### Step 6 – Load match data
 
 1. Go to the **Admin** page.
-2. In the **Live Score API** section, register (or log in) with an email on [worldcup26.ir](https://worldcup26.ir) to get a 84-day JWT token.
-3. The token is saved in Firestore automatically.
-4. Click **Initialize All Matches from API** — this loads all 104 fixtures into your database.
+2. In the **WC2026 API** section, paste the bearer key you receive from [api.wc2026api.com/docs](https://api.wc2026api.com/docs).
+3. The key is saved in Firestore automatically.
+4. Click **Initialize Fixtures from API** — this loads all fixtures into your database.
 5. Your participants can now make predictions!
 
 ### Step 7 – Sync scores during the tournament
 
-Whenever you want to update scores, go to Admin → **Sync Live Scores from API**. This updates all finished match scores, and points recalculate automatically when anyone loads the leaderboard.
+Whenever you want to update scores, go to Admin → **Sync Fixtures and Scores**. This refreshes the fixtures and finished match scores from the WC2026 API, and points recalculate automatically when anyone loads the leaderboard.
 
 ---
 

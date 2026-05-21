@@ -2,7 +2,7 @@
 //  admin.js  –  Logic for admin.html
 // ============================================================
 
-const API_BASE = 'https://resultsapi.philip-hultgren.workers.dev';
+const API_BASE = 'https://api.wc2026api.com';
 let adminUser = null;
 let removeUserModal = null;
 
@@ -58,65 +58,31 @@ async function saveLockSettings() {
   showToast('Lock settings saved.');
 }
 
-// ── API Token ───────────────────────────────────────────
-async function apiRegister() {
-  const name     = document.getElementById('api-name').value.trim();
-  const email    = document.getElementById('api-email').value.trim();
-  const password = document.getElementById('api-password').value;
-  if (!name || !email || !password) { showToast('Fill in name, email, password first.', 'warning'); return; }
-  const res = await safeApiFetch(`${API_BASE}/auth/register`, 'POST', { name, email, password });
-  if (res?.token) {
-    document.getElementById('api-token-input').value = res.token;
-    document.getElementById('api-token-result').textContent = '✅ Registered & token received!';
-  } else if ((res?.message || '').toLowerCase().includes('already')) {
-    document.getElementById('api-token-result').textContent = 'ℹ️ Account already exists. Trying login...';
-    await apiLogin();
-  } else if (res === null || res?.rawText === 'null') {
-    // Some API instances return literal "null" for duplicate/invalid register attempts.
-    document.getElementById('api-token-result').textContent = 'ℹ️ Register returned null. Trying login with the same email/password...';
-    await apiLogin();
-  } else {
-    const msg = res?.message || res?.rawText || `HTTP ${res?.status || 'unknown'} from API`;
-    document.getElementById('api-token-result').textContent = '⚠️ ' + msg;
-  }
-}
-
-async function apiLogin() {
-  const email    = document.getElementById('api-email').value.trim();
-  const password = document.getElementById('api-password').value;
-  if (!email || !password) { showToast('Enter email and password.', 'warning'); return; }
-  const res = await safeApiFetch(`${API_BASE}/auth/authenticate`, 'POST', { email, password });
-  if (res?.token) {
-    document.getElementById('api-token-input').value = res.token;
-    document.getElementById('api-token-result').textContent = '✅ Logged in, token received!';
-  } else {
-    const msg = res?.message || res?.rawText || `HTTP ${res?.status || 'unknown'} from API`;
-    document.getElementById('api-token-result').textContent = '⚠️ ' + msg;
-  }
-}
-
 async function saveApiToken() {
   const token = document.getElementById('api-token-input').value.trim();
   if (!token) { showToast('Token is empty.', 'warning'); return; }
   await db.collection('config').doc('settings').set({ apiToken: token }, { merge: true });
-  showToast('API token saved.');
+  showToast('API key saved.');
 }
 
 // ── Initialize ALL matches from API ─────────────────────
 async function initMatchesFromApi() {
   const token = document.getElementById('api-token-input').value.trim();
-  if (!token) { showToast('Save an API token first.', 'warning'); return; }
+  if (!token) { showToast('Save an API key first.', 'warning'); return; }
   setApiStatus('⏳ Fetching teams and matches…');
 
   const [teamsData, gamesData] = await Promise.all([
-    safeApiFetch(`${API_BASE}/get/teams`, 'GET', null, token),
-    safeApiFetch(`${API_BASE}/get/games`, 'GET', null, token)
+    safeApiFetch(`${API_BASE}/teams`, 'GET', null, token),
+    safeApiFetch(`${API_BASE}/matches`, 'GET', null, token)
   ]);
 
   if (!teamsData || !gamesData) {
-    setApiStatus('❌ Failed to fetch data from API. Check token and try again.');
+    setApiStatus('❌ Failed to fetch data from API. Check API key and try again.');
     return;
   }
+
+  const existingMatchesSnap = await db.collection('matches').get();
+  const existingMatches = existingMatchesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
   // Build team lookup map (id → team object)
   const teams = {};
@@ -143,30 +109,14 @@ async function initMatchesFromApi() {
   for (let i = 0; i < gameList.length; i += CHUNK) {
     const batch = db.batch();
     for (const g of gameList.slice(i, i + CHUNK)) {
-      const homeTeamObj = teams[String(g.home_team_id)] || {};
-      const awayTeamObj = teams[String(g.away_team_id)] || {};
       const docRef = db.collection('matches').doc(String(g.id));
-      const actualHome = toMaybeNumber(g.home_score);
-      const actualAway = toMaybeNumber(g.away_score);
-      const finished = toBool(g.finished);
-      batch.set(docRef, {
-        id:       String(g.id),
-        homeTeam: g.home_team_name_en || homeTeamObj.name_en || `Team ${g.home_team_id}`,
-        awayTeam: g.away_team_name_en || awayTeamObj.name_en || `Team ${g.away_team_id}`,
-        homeFlag: homeTeamObj.flag   || '',
-        awayFlag: awayTeamObj.flag   || '',
-        group:    g.group  || '',
-        type:     typeMap[String(g.type).toLowerCase()] || g.type || 'group',
-        matchday: Number(g.matchday) || 0,
-        date:     g.local_date || '',
-        actualHome,
-        actualAway,
-        finished,
-        sortOrder:  Number(g.id) || 0
-      }, { merge: false });
+      batch.set(docRef, buildMatchDoc(g, teams, typeMap), { merge: false });
     }
     await batch.commit();
   }
+
+  await migratePredictionsIfNeeded(existingMatches, gameList);
+
   setApiStatus(`✅ ${gameList.length} matches initialized!`);
   showToast(`${gameList.length} matches loaded into Firestore.`);
 }
@@ -174,11 +124,27 @@ async function initMatchesFromApi() {
 // ── Sync live scores from API ────────────────────────────
 async function syncScoresFromApi() {
   const token = document.getElementById('api-token-input').value.trim();
-  if (!token) { showToast('Save an API token first.', 'warning'); return; }
-  setApiStatus('⏳ Syncing scores…');
+  if (!token) { showToast('Save an API key first.', 'warning'); return; }
+  setApiStatus('⏳ Syncing fixtures and scores…');
 
-  const gamesData = await safeApiFetch(`${API_BASE}/get/games`, 'GET', null, token);
-  if (!gamesData) { setApiStatus('❌ Failed to fetch games.'); return; }
+  const [teamsData, gamesData] = await Promise.all([
+    safeApiFetch(`${API_BASE}/teams`, 'GET', null, token),
+    safeApiFetch(`${API_BASE}/matches`, 'GET', null, token)
+  ]);
+  if (!teamsData || !gamesData) { setApiStatus('❌ Failed to fetch data from API.'); return; }
+
+  const teams = {};
+  const teamList = extractList(teamsData, ['teams', 'data', 'results', 'items']);
+  teamList.forEach(t => { teams[String(t.id)] = t; });
+
+  const typeMap = {
+    'group': 'group',
+    'round_of_32': 'round32', 'r32': 'round32',
+    'round_of_16': 'round16', 'r16': 'round16',
+    'quarter_final': 'qf', 'quarterfinal': 'qf',
+    'semi_final': 'sf', 'semifinal': 'sf',
+    'final': 'final'
+  };
 
   const gameList = extractList(gamesData, ['games', 'data', 'matches', 'results', 'items']);
   let updated = 0;
@@ -187,11 +153,7 @@ async function syncScoresFromApi() {
     const batch = db.batch();
     for (const g of gameList.slice(i, i + CHUNK)) {
       const docRef = db.collection('matches').doc(String(g.id));
-      batch.set(docRef, {
-        actualHome: toMaybeNumber(g.home_score),
-        actualAway: toMaybeNumber(g.away_score),
-        finished:   toBool(g.finished)
-      }, { merge: true });
+      batch.set(docRef, buildMatchDoc(g, teams, typeMap), { merge: true });
       updated++;
     }
     await batch.commit();
@@ -403,6 +365,107 @@ function extractList(payload, keys) {
     }
   }
   return [];
+}
+
+function buildMatchDoc(g, teams, typeMap) {
+  const homeTeamId = g.home_team_id ?? g.home_team?.id ?? g.home_team?.team_id ?? g.homeTeamId ?? g.homeTeam?.id ?? '';
+  const awayTeamId = g.away_team_id ?? g.away_team?.id ?? g.away_team?.team_id ?? g.awayTeamId ?? g.awayTeam?.id ?? '';
+  const homeTeamName = g.home_team_name_en || g.home_team || g.homeTeam || g.home_team_name || g.home_team?.name || g.home_team?.name_en || g.home_team?.team_name || '';
+  const awayTeamName = g.away_team_name_en || g.away_team || g.awayTeam || g.away_team_name || g.away_team?.name || g.away_team?.name_en || g.away_team?.team_name || '';
+  const homeTeamObj = teams[String(homeTeamId)] || {};
+  const awayTeamObj = teams[String(awayTeamId)] || {};
+  const group = g.group || g.group_name || homeTeamObj.group_name || awayTeamObj.group_name || '';
+  const round = String(g.type || g.round || '').toLowerCase();
+  const kickoffUtc = g.kickoff_utc || g.kickoffUtc || g.local_date || g.date || '';
+  const matchId = String(g.id ?? g.match_number ?? g.matchId ?? g.match_id ?? '');
+
+  return {
+    id: matchId,
+    homeTeam: homeTeamName || homeTeamObj.name || homeTeamObj.name_en || `Team ${homeTeamId}`,
+    awayTeam: awayTeamName || awayTeamObj.name || awayTeamObj.name_en || `Team ${awayTeamId}`,
+    homeTeamCode: g.home_team_code || homeTeamObj.code || '',
+    awayTeamCode: g.away_team_code || awayTeamObj.code || '',
+    homeFlag: g.home_team_flag || homeTeamObj.flag_url || homeTeamObj.flag || '',
+    awayFlag: g.away_team_flag || awayTeamObj.flag_url || awayTeamObj.flag || '',
+    group,
+    type: typeMap[round] || round || 'group',
+    matchday: Number(g.matchday || g.match_number) || 0,
+    date: kickoffUtc,
+    kickoffUtc,
+    stadium: g.stadium || '',
+    actualHome: toMaybeNumber(g.home_score),
+    actualAway: toMaybeNumber(g.away_score),
+    finished: toMatchFinished(g),
+    sortOrder: Number(matchId) || Number(g.match_number) || 0
+  };
+}
+
+function toMatchFinished(g) {
+  if (g.status) return String(g.status).toLowerCase() === 'completed';
+  if (g.phase) return ['ft', 'ft_pen', 'completed'].includes(String(g.phase).toLowerCase());
+  return toBool(g.finished);
+}
+
+function matchFixtureKey(match) {
+  const round = String(match.type || match.round || '').toLowerCase();
+  const group = String(match.group || match.group_name || '').trim().toUpperCase();
+  const home = normalizeFixtureText(match.homeTeam || match.home_team || match.home_team_name_en || match.home_team_name || '');
+  const away = normalizeFixtureText(match.awayTeam || match.away_team || match.away_team_name_en || match.away_team_name || '');
+  const matchday = String(match.matchday || match.match_number || '').trim();
+  return [round, group, matchday, home, away].join('|');
+}
+
+function normalizeFixtureText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function migratePredictionsIfNeeded(oldMatches, newMatches) {
+  const oldByKey = new Map();
+  const oldById = new Map();
+  for (const match of oldMatches) {
+    oldById.set(String(match.id), match);
+    oldByKey.set(matchFixtureKey(match), match);
+  }
+
+  const newByKey = new Map();
+  for (const match of newMatches) {
+    newByKey.set(matchFixtureKey(match), match);
+  }
+
+  const idChanges = [];
+  for (const [key, newMatch] of newByKey.entries()) {
+    const oldMatch = oldByKey.get(key);
+    if (!oldMatch || String(oldMatch.id) === String(newMatch.id)) continue;
+    idChanges.push({ oldId: String(oldMatch.id), newId: String(newMatch.id) });
+  }
+
+  if (idChanges.length === 0) {
+    return;
+  }
+
+  const usersSnap = await db.collection('users').get();
+  for (const userDoc of usersSnap.docs) {
+    const predCol = db.collection('predictions').doc(userDoc.id).collection('matches');
+    for (const { oldId, newId } of idChanges) {
+      if (oldId === newId) continue;
+      const oldPredSnap = await predCol.doc(oldId).get();
+      if (!oldPredSnap.exists) continue;
+      const newPredSnap = await predCol.doc(newId).get();
+      if (newPredSnap.exists) {
+        await predCol.doc(oldId).delete().catch(() => {});
+        continue;
+      }
+      await predCol.doc(newId).set(oldPredSnap.data(), { merge: false });
+      await predCol.doc(oldId).delete().catch(() => {});
+    }
+  }
+
+  setApiStatus(`✅ Migrated predictions for ${idChanges.length} fixture IDs.`);
 }
 
 function toBool(value) {
