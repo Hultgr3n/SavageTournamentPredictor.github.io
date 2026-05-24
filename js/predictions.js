@@ -33,7 +33,28 @@ const TEAM_NAME_TO_ISO2 = {
   japan: 'JP', 'south korea': 'KR', korea: 'KR', morocco: 'MA', mexico: 'MX', netherlands: 'NL', nigeria: 'NG',
   norway: 'NO', 'new zealand': 'NZ', paraguay: 'PY', peru: 'PE', poland: 'PL', portugal: 'PT', romania: 'RO',
   scotland: 'GB', senegal: 'SN', serbia: 'RS', switzerland: 'CH', sweden: 'SE', tunisia: 'TN', turkey: 'TR',
-  ukraine: 'UA', uruguay: 'UY', 'united states': 'US', usa: 'US', venezuela: 'VE', wales: 'GB'
+  ukraine: 'UA', uruguay: 'UY', 'united states': 'US', usa: 'US', venezuela: 'VE', wales: 'GB',
+
+  // Additional teams currently shown in fixtures
+  'bosnia-herzegovina': 'BA',
+  'bosnia and herzegovina': 'BA',
+  qatar: 'QA',
+  haiti: 'HT',
+  "cote d'ivoire": 'CI',
+  'cote divoire': 'CI',
+  "côte d'ivoire": 'CI',
+  curacao: 'CW',
+  curaçao: 'CW',
+  'cabo verde': 'CV',
+  'saudi arabia': 'SA',
+  iraq: 'IQ',
+  algeria: 'DZ',
+  jordan: 'JO',
+  'congo dr': 'CD',
+  'dr congo': 'CD',
+  'democratic republic of congo': 'CD',
+  uzbekistan: 'UZ',
+  panama: 'PA'
 };
 
 function normalizeTeamNameKey(name) {
