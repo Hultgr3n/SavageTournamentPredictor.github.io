@@ -76,8 +76,15 @@
 
   // If already logged in from a previous session, go straight to predictions.
   // During active login/register we suppress this to avoid redirecting before profile sync is complete.
-  auth.onAuthStateChanged(user => {
-    if (user && !suppressAutoRedirect) window.location.href = 'predictions.html';
+  auth.onAuthStateChanged(async user => {
+    if (user && !suppressAutoRedirect) {
+      try {
+        await ensureLoggedInUserProfile(user);
+      } catch (err) {
+        console.error('Profile self-heal failed on auto-redirect:', err);
+      }
+      window.location.href = 'predictions.html';
+    }
   });
 
   function showTab(tab) {
@@ -92,31 +99,6 @@
     return username.toLowerCase().replace(/[^a-z0-9_\-]/g, '') + '@savage.predictor';
   }
 
-  async function ensureUserProfile(uid, username) {
-    const normalized = username.toLowerCase();
-    const userRef = db.collection('users').doc(uid);
-    const usernameRef = db.collection('usernames').doc(normalized);
-
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
-      await userRef.set({
-        username,
-        isAdmin: false,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-    } else {
-      const existing = userSnap.data() || {};
-      if (!existing.username) {
-        await userRef.set({ username }, { merge: true });
-      }
-    }
-
-    const usernameSnap = await usernameRef.get();
-    if (!usernameSnap.exists) {
-      await usernameRef.set({ uid });
-    }
-  }
-
   async function doLogin(e) {
     e.preventDefault();
     suppressAutoRedirect = true;
@@ -128,7 +110,7 @@
     const password = document.getElementById('login-password').value;
     try {
       const cred = await auth.signInWithEmailAndPassword(usernameToEmail(username), password);
-      await ensureUserProfile(cred.user.uid, username);
+      await ensureLoggedInUserProfile(cred.user, username);
       window.location.href = 'predictions.html';
     } catch (ex) {
       const code = ex?.code || '';
@@ -168,7 +150,7 @@
       }
       const cred = await auth.createUserWithEmailAndPassword(usernameToEmail(username), password);
       await cred.user.getIdToken(true);
-      await ensureUserProfile(cred.user.uid, username);
+      await ensureLoggedInUserProfile(cred.user, username);
       window.location.href = 'predictions.html';
     } catch (ex) {
       err.textContent = ex.message || 'Registration failed.';

@@ -106,7 +106,10 @@
   <div class="card mb-4">
     <div class="card-header bg-secondary text-white fw-bold">👥 User Management</div>
     <div class="card-body">
-      <button class="btn btn-secondary mb-3" onclick="loadUsers()">Load Users</button>
+      <div class="d-flex gap-2 flex-wrap mb-3">
+        <button class="btn btn-secondary" onclick="loadUsers()">Load Users</button>
+        <button class="btn btn-outline-secondary" onclick="backfillUsers()">Backfill Missing Users</button>
+      </div>
       <div id="users-summary" class="mb-3"></div>
       <div id="users-table"></div>
     </div>

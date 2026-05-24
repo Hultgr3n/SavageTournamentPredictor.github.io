@@ -179,7 +179,77 @@ async function saveManualScore() {
 }
 
 // ── User Management ─────────────────────────────────────
+async function backfillMissingUsers(silent = false) {
+  const [usersSnap, usernamesSnap, predictionsSnap] = await Promise.all([
+    db.collection('users').get(),
+    db.collection('usernames').get(),
+    db.collection('predictions').get()
+  ]);
+
+  const existingUserIds = new Set(usersSnap.docs.map(d => d.id));
+  const usernameByUid = new Map();
+
+  usernamesSnap.forEach((doc) => {
+    const data = doc.data() || {};
+    const uid = data.uid;
+    if (!uid) return;
+    if (!usernameByUid.has(uid)) {
+      usernameByUid.set(uid, doc.id);
+    }
+  });
+
+  const missingUserIds = new Set();
+  usernameByUid.forEach((_username, uid) => {
+    if (!existingUserIds.has(uid)) missingUserIds.add(uid);
+  });
+  predictionsSnap.forEach((doc) => {
+    if (!existingUserIds.has(doc.id)) missingUserIds.add(doc.id);
+  });
+
+  if (missingUserIds.size === 0) {
+    if (!silent) showToast('No missing users found.');
+    return 0;
+  }
+
+  const ids = Array.from(missingUserIds);
+  const CHUNK = 400;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const batch = db.batch();
+    for (const uid of ids.slice(i, i + CHUNK)) {
+      const fallbackName = `legacy-${uid.slice(0, 8)}`;
+      const username = String(usernameByUid.get(uid) || fallbackName)
+        .replace(/[^A-Za-z0-9_\-]/g, '')
+        .slice(0, 20) || fallbackName;
+
+      batch.set(db.collection('users').doc(uid), {
+        username,
+        isAdmin: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        legacyBackfill: true
+      }, { merge: true });
+    }
+    await batch.commit();
+  }
+
+  if (!silent) {
+    showToast(`Backfilled ${ids.length} missing account${ids.length === 1 ? '' : 's'}.`);
+  }
+  return ids.length;
+}
+
+async function backfillUsers() {
+  const created = await backfillMissingUsers(false);
+  if (created > 0) {
+    await loadUsers();
+  }
+}
+
 async function loadUsers() {
+  const repaired = await backfillMissingUsers(true);
+  if (repaired > 0) {
+    showToast(`Recovered ${repaired} legacy account${repaired === 1 ? '' : 's'} into users list.`, 'info');
+  }
+
   const snap = await db.collection('users').get();
   const users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
 

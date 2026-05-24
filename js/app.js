@@ -4,6 +4,68 @@
 
 /* ---------- Auth helpers ---------- */
 
+function sanitizeUsernameCandidate(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^A-Za-z0-9_\-]/g, '')
+    .slice(0, 20);
+}
+
+function usernameFromAuthUser(user) {
+  if (!user) return '';
+  const fromEmail = String(user.email || '').split('@')[0] || '';
+  const clean = sanitizeUsernameCandidate(fromEmail);
+  if (clean.length >= 3) return clean;
+  return `user-${String(user.uid || '').slice(0, 8)}`;
+}
+
+/**
+ * Ensure logged-in users have a profile in /users and a registry entry in /usernames.
+ * This safely backfills legacy accounts missing profile records.
+ */
+async function ensureLoggedInUserProfile(user, preferredUsername = '') {
+  if (!user || !user.uid) return null;
+
+  const uid = user.uid;
+  const userRef = db.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  const existing = userSnap.exists ? (userSnap.data() || {}) : {};
+
+  let username = sanitizeUsernameCandidate(preferredUsername);
+  if (!username) username = sanitizeUsernameCandidate(existing.username || '');
+
+  if (!username) {
+    const usernameSnap = await db.collection('usernames').where('uid', '==', uid).limit(1).get();
+    if (!usernameSnap.empty) {
+      username = sanitizeUsernameCandidate(usernameSnap.docs[0].id);
+    }
+  }
+
+  if (!username) username = usernameFromAuthUser(user);
+
+  const profileUpdate = { username };
+  if (!userSnap.exists) {
+    profileUpdate.isAdmin = false;
+    profileUpdate.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+  }
+  await userRef.set(profileUpdate, { merge: true });
+
+  const normalized = username.toLowerCase();
+  if (normalized) {
+    const regRef = db.collection('usernames').doc(normalized);
+    const regSnap = await regRef.get();
+    const regUid = regSnap.exists ? (regSnap.data() || {}).uid : null;
+
+    if (!regSnap.exists) {
+      await regRef.set({ uid });
+    } else if (!regUid) {
+      await regRef.set({ uid }, { merge: true });
+    }
+  }
+
+  return username;
+}
+
 /**
  * Require login. If not logged in, redirect to index.html.
  * Returns a Promise<{uid, username, isAdmin}>.
@@ -14,6 +76,11 @@ function requireAuth() {
       if (!user) {
         window.location.href = 'index.html';
         return;
+      }
+      try {
+        await ensureLoggedInUserProfile(user);
+      } catch (err) {
+        console.error('Profile self-heal failed:', err);
       }
       const snap = await db.collection('users').doc(user.uid).get();
       const data = snap.data() || {};
