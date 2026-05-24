@@ -180,10 +180,11 @@ async function saveManualScore() {
 
 // ── User Management ─────────────────────────────────────
 async function backfillMissingUsers(silent = false) {
-  const [usersSnap, usernamesSnap, predictionsSnap] = await Promise.all([
+  const [usersSnap, usernamesSnap, predictionsSnap, predictionMatchesSnap] = await Promise.all([
     db.collection('users').get(),
     db.collection('usernames').get(),
-    db.collection('predictions').get()
+    db.collection('predictions').get(),
+    db.collectionGroup('matches').get()
   ]);
 
   const existingUserIds = new Set(usersSnap.docs.map(d => d.id));
@@ -204,6 +205,12 @@ async function backfillMissingUsers(silent = false) {
   });
   predictionsSnap.forEach((doc) => {
     if (!existingUserIds.has(doc.id)) missingUserIds.add(doc.id);
+  });
+  predictionMatchesSnap.forEach((doc) => {
+    const uid = doc.ref.parent?.parent?.id;
+    if (uid && !existingUserIds.has(uid)) {
+      missingUserIds.add(uid);
+    }
   });
 
   if (missingUserIds.size === 0) {

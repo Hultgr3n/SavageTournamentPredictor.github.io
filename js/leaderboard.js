@@ -6,7 +6,22 @@
   const me = await requireAuth();
   buildNav(me.username, me.isAdmin);
   await buildLeaderboard(me.uid);
+  attachLeaderboardAutoRefresh(me.uid);
 })();
+
+let leaderboardRefreshTimer = null;
+
+function scheduleLeaderboardRefresh(myUid) {
+  if (leaderboardRefreshTimer) clearTimeout(leaderboardRefreshTimer);
+  leaderboardRefreshTimer = setTimeout(() => {
+    buildLeaderboard(myUid).catch((err) => console.error('Leaderboard refresh failed:', err));
+  }, 250);
+}
+
+function attachLeaderboardAutoRefresh(myUid) {
+  db.collection('matches').onSnapshot(() => scheduleLeaderboardRefresh(myUid));
+  db.collection('users').onSnapshot(() => scheduleLeaderboardRefresh(myUid));
+}
 
 async function buildLeaderboard(myUid) {
   const container = document.getElementById('leaderboard-container');
@@ -17,14 +32,15 @@ async function buildLeaderboard(myUid) {
   matchSnap.forEach(d => { matches[d.id] = d.data(); });
   const finishedMatches = Object.entries(matches).filter(([, m]) => m.finished);
 
-  if (finishedMatches.length === 0) {
-    container.innerHTML = '<div class="alert alert-info">No matches have been played yet. Check back once games start!</div>';
-    return;
-  }
-
   // 2. Load all users
   const usersSnap = await db.collection('users').get();
   const users = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+
+  if (users.length === 0) {
+    container.innerHTML = '<div class="alert alert-info">No users found yet.</div>';
+    document.getElementById('last-updated').textContent = 'No accounts available to rank.';
+    return;
+  }
 
   // 3. For each user, load their predictions and compute total points
   const rows = await Promise.all(users.map(async (u) => {
@@ -58,8 +74,16 @@ async function buildLeaderboard(myUid) {
     };
   }));
 
-  // 4. Sort by total pts desc, then exact scores as tiebreaker
-  rows.sort((a, b) => b.totalPts - a.totalPts || b.exactScores - a.exactScores);
+  // 4. Sort alphabetically until matches finish; otherwise rank by points and tiebreakers.
+  if (finishedMatches.length === 0) {
+    rows.sort((a, b) => a.username.localeCompare(b.username));
+  } else {
+    rows.sort((a, b) =>
+      b.totalPts - a.totalPts ||
+      b.exactScores - a.exactScores ||
+      a.username.localeCompare(b.username)
+    );
+  }
 
   // 5. Render table
   const rankEmoji = (i) => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
@@ -94,5 +118,7 @@ async function buildLeaderboard(myUid) {
     Exact score = both goals + outcome correct. Tiebreaker: most exact scores.</p>`;
 
   document.getElementById('last-updated').textContent =
-    `Based on ${finishedMatches.length} finished match(es). Refreshes on page load.`;
+    finishedMatches.length === 0
+      ? 'No finished matches yet. Showing all accounts alphabetically with 0 points.'
+      : `Based on ${finishedMatches.length} finished match(es). Auto-refreshes when matches or users change.`;
 }
