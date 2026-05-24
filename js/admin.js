@@ -179,103 +179,8 @@ async function saveManualScore() {
 }
 
 // ── User Management ─────────────────────────────────────
-async function backfillMissingUsers(silent = false) {
-  const [usersSnap, usernamesSnap, predictionsSnap, predictionMatchesSnap] = await Promise.all([
-    db.collection('users').get(),
-    db.collection('usernames').get(),
-    db.collection('predictions').get(),
-    db.collectionGroup('matches').get()
-  ]);
-
-  const existingUserIds = new Set(usersSnap.docs.map(d => d.id));
-  const usernameByUid = new Map();
-
-  usernamesSnap.forEach((doc) => {
-    const data = doc.data() || {};
-    const uid = data.uid;
-    if (!uid) return;
-    if (!usernameByUid.has(uid)) {
-      usernameByUid.set(uid, doc.id);
-    }
-  });
-
-  const missingUserIds = new Set();
-  usernameByUid.forEach((_username, uid) => {
-    if (!existingUserIds.has(uid)) missingUserIds.add(uid);
-  });
-  predictionsSnap.forEach((doc) => {
-    if (!existingUserIds.has(doc.id)) missingUserIds.add(doc.id);
-  });
-  predictionMatchesSnap.forEach((doc) => {
-    const uid = doc.ref.parent?.parent?.id;
-    if (uid && !existingUserIds.has(uid)) {
-      missingUserIds.add(uid);
-    }
-  });
-
-  const diagnostics = {
-    users: usersSnap.size,
-    usernames: usernamesSnap.size,
-    predictionsRoot: predictionsSnap.size,
-    predictionEntries: predictionMatchesSnap.size,
-    missingUsers: missingUserIds.size
-  };
-
-  if (missingUserIds.size === 0) {
-    if (!silent) {
-      showToast(
-        `No missing users found. users=${diagnostics.users}, usernames=${diagnostics.usernames}, prediction owners=${diagnostics.predictionsRoot}, prediction entries=${diagnostics.predictionEntries}`,
-        'info'
-      );
-    }
-    return 0;
-  }
-
-  const ids = Array.from(missingUserIds);
-  const CHUNK = 400;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const batch = db.batch();
-    for (const uid of ids.slice(i, i + CHUNK)) {
-      const fallbackName = `legacy-${uid.slice(0, 8)}`;
-      const username = String(usernameByUid.get(uid) || fallbackName)
-        .replace(/[^A-Za-z0-9_\-]/g, '')
-        .slice(0, 20) || fallbackName;
-
-      batch.set(db.collection('users').doc(uid), {
-        username,
-        isAdmin: false,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        legacyBackfill: true
-      }, { merge: true });
-    }
-    await batch.commit();
-  }
-
-  if (!silent) {
-    showToast(`Backfilled ${ids.length} missing account${ids.length === 1 ? '' : 's'}.`);
-  }
-  return ids.length;
-}
-
-async function backfillUsers() {
-  try {
-    const created = await backfillMissingUsers(false);
-    if (created > 0) {
-      await loadUsers();
-    }
-  } catch (err) {
-    console.error('Backfill failed:', err);
-    showToast(`Backfill failed: ${err?.message || 'Unknown error'}`, 'danger');
-  }
-}
-
 async function loadUsers() {
   try {
-    const repaired = await backfillMissingUsers(true);
-    if (repaired > 0) {
-      showToast(`Recovered ${repaired} legacy account${repaired === 1 ? '' : 's'} into users list.`, 'info');
-    }
-
     const [usersSnap, usernamesSnap] = await Promise.all([
       db.collection('users').get(),
       db.collection('usernames').get()
@@ -366,6 +271,50 @@ async function loadUsers() {
   } catch (err) {
     console.error('Load users failed:', err);
     showToast(`Load users failed: ${err?.message || 'Unknown error'}`, 'danger');
+  }
+}
+
+async function addUserManually() {
+  const uidInput = document.getElementById('manual-user-uid');
+  const usernameInput = document.getElementById('manual-user-username');
+  const uid = String(uidInput?.value || '').trim();
+  const usernameRaw = String(usernameInput?.value || '').trim();
+  const username = usernameRaw.replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 20);
+
+  if (!uid) {
+    showToast('Enter a UID from Firebase Authentication.', 'warning');
+    return;
+  }
+  if (!username || username.length < 3) {
+    showToast('Enter a valid username (3-20 chars, letters/numbers/_/-).', 'warning');
+    return;
+  }
+
+  const normalized = username.toLowerCase();
+
+  try {
+    const existingName = await db.collection('usernames').doc(normalized).get();
+    if (existingName.exists && (existingName.data() || {}).uid !== uid) {
+      showToast('That username is already mapped to another account.', 'warning');
+      return;
+    }
+
+    await db.collection('users').doc(uid).set({
+      username,
+      isAdmin: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      manualAdd: true
+    }, { merge: true });
+
+    await db.collection('usernames').doc(normalized).set({ uid }, { merge: true });
+
+    showToast(`Added user ${username} (${uid}).`);
+    if (uidInput) uidInput.value = '';
+    if (usernameInput) usernameInput.value = '';
+    await loadUsers();
+  } catch (err) {
+    console.error('Manual add failed:', err);
+    showToast(`Manual add failed: ${err?.message || 'Unknown error'}`, 'danger');
   }
 }
 
