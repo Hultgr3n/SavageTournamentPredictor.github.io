@@ -15,6 +15,66 @@ const KNOCKOUT_LABEL = {
   qf: 'Quarter-Finals', sf: 'Semi-Finals', final: 'Final'
 };
 
+// Fallback mapping for APIs that provide FIFA-style 3-letter codes rather than ISO-2 country codes.
+const TEAM_CODE_TO_ISO2 = {
+  ARG: 'AR', AUS: 'AU', AUT: 'AT', BEL: 'BE', BOL: 'BO', BRA: 'BR', CAN: 'CA', CHI: 'CL', CHN: 'CN', COL: 'CO',
+  CRC: 'CR', CRO: 'HR', CZE: 'CZ', DEN: 'DK', ECU: 'EC', EGY: 'EG', ENG: 'GB', ESP: 'ES', FRA: 'FR', GER: 'DE',
+  GHA: 'GH', GRE: 'GR', HUN: 'HU', IRN: 'IR', IRL: 'IE', ISL: 'IS', ITA: 'IT', JPN: 'JP', KOR: 'KR', MAR: 'MA',
+  MEX: 'MX', NED: 'NL', NGA: 'NG', NOR: 'NO', NZL: 'NZ', PAR: 'PY', PER: 'PE', POL: 'PL', POR: 'PT', ROU: 'RO',
+  RSA: 'ZA', SCO: 'GB', SEN: 'SN', SRB: 'RS', SUI: 'CH', SWE: 'SE', TUN: 'TN', TUR: 'TR', UKR: 'UA', URU: 'UY',
+  USA: 'US', VEN: 'VE', WAL: 'GB'
+};
+
+const TEAM_NAME_TO_ISO2 = {
+  argentina: 'AR', australia: 'AU', austria: 'AT', belgium: 'BE', bolivia: 'BO', brazil: 'BR', cameroon: 'CM',
+  canada: 'CA', chile: 'CL', china: 'CN', colombia: 'CO', 'costa rica': 'CR', croatia: 'HR', czechia: 'CZ',
+  'czech republic': 'CZ', denmark: 'DK', ecuador: 'EC', egypt: 'EG', england: 'GB', spain: 'ES', france: 'FR',
+  germany: 'DE', ghana: 'GH', greece: 'GR', hungary: 'HU', iran: 'IR', ireland: 'IE', iceland: 'IS', italy: 'IT',
+  japan: 'JP', 'south korea': 'KR', korea: 'KR', morocco: 'MA', mexico: 'MX', netherlands: 'NL', nigeria: 'NG',
+  norway: 'NO', 'new zealand': 'NZ', paraguay: 'PY', peru: 'PE', poland: 'PL', portugal: 'PT', romania: 'RO',
+  scotland: 'GB', senegal: 'SN', serbia: 'RS', switzerland: 'CH', sweden: 'SE', tunisia: 'TN', turkey: 'TR',
+  ukraine: 'UA', uruguay: 'UY', 'united states': 'US', usa: 'US', venezuela: 'VE', wales: 'GB'
+};
+
+function normalizeTeamNameKey(name) {
+  return String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function teamCodeToIso2(code) {
+  const clean = String(code || '').replace(/[^A-Za-z]/g, '').toUpperCase();
+  if (clean.length === 2) return clean;
+  if (clean.length === 3) return TEAM_CODE_TO_ISO2[clean] || '';
+  return '';
+}
+
+function inferIso2(code, teamName) {
+  const fromCode = teamCodeToIso2(code);
+  if (fromCode) return fromCode;
+  return TEAM_NAME_TO_ISO2[normalizeTeamNameKey(teamName)] || '';
+}
+
+function flagCdnUrlFromIso2(iso2) {
+  if (!iso2) return '';
+  return `https://flagcdn.com/w40/${iso2.toLowerCase()}.png`;
+}
+
+function resolveFlagUrl(flagUrl, teamCode, teamName) {
+  if (flagUrl) return flagUrl;
+  const iso2 = inferIso2(teamCode, teamName);
+  return flagCdnUrlFromIso2(iso2);
+}
+
+function renderFlagImg(flagUrl, teamName, classes) {
+  if (!flagUrl) return '';
+  const cls = String(classes || '').trim();
+  const classAttr = cls ? `flag-icon ${cls}` : 'flag-icon';
+  return `<img src="${escHtml(flagUrl)}" class="${classAttr}" alt="${escHtml(teamName)} flag" loading="lazy" referrerpolicy="no-referrer"/>`;
+}
+
 const KNOCKOUT_TEMPLATE = {
   round32: [
     { date: 'June 29', city: 'Foxborough', home: 'Winner Group A', away: '3rd Group A/B/C/D/F' },
@@ -128,11 +188,14 @@ function getGroupStandings(groupName) {
   const groupMatches = allMatches.filter(m => m.type === 'group' && m.group === groupName);
   const table = new Map();
 
-  const ensureTeam = (name, flag) => {
+  const ensureTeam = (name, flag, code) => {
     const key = name || 'TBD';
     if (!table.has(key)) {
       table.set(key, {
-        team: key, flag: flag || '', p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0,
+        team: key,
+        code: code || '',
+        flag: resolveFlagUrl(flag || '', code || '', key),
+        p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0,
         h2h: {} // Head-to-head vs other teams
       });
     }
@@ -140,8 +203,8 @@ function getGroupStandings(groupName) {
   };
 
   for (const match of groupMatches) {
-    const home = ensureTeam(match.homeTeam || 'TBD', match.homeFlag || '');
-    const away = ensureTeam(match.awayTeam || 'TBD', match.awayFlag || '');
+    const home = ensureTeam(match.homeTeam || 'TBD', match.homeFlag || '', match.homeTeamCode || '');
+    const away = ensureTeam(match.awayTeam || 'TBD', match.awayFlag || '', match.awayTeamCode || '');
 
     if (!match.finished || match.actualHome === null || match.actualAway === null) continue;
 
@@ -281,12 +344,13 @@ function renderKnockoutStage() {
 function renderGroupStandings(groupName, matches) {
   const table = new Map();
 
-  const ensureTeam = (name, flag) => {
+  const ensureTeam = (name, flag, code) => {
     const key = name || 'TBD';
     if (!table.has(key)) {
       table.set(key, {
         team: key,
-        flag: flag || '',
+        code: code || '',
+        flag: resolveFlagUrl(flag || '', code || '', key),
         p: 0,
         w: 0,
         d: 0,
@@ -302,8 +366,8 @@ function renderGroupStandings(groupName, matches) {
   };
 
   for (const match of matches) {
-    const home = ensureTeam(match.homeTeam || 'TBD', match.homeFlag || '');
-    const away = ensureTeam(match.awayTeam || 'TBD', match.awayFlag || '');
+    const home = ensureTeam(match.homeTeam || 'TBD', match.homeFlag || '', match.homeTeamCode || '');
+    const away = ensureTeam(match.awayTeam || 'TBD', match.awayFlag || '', match.awayTeamCode || '');
 
     if (!match.finished || match.actualHome === null || match.actualAway === null || match.actualHome === undefined || match.actualAway === undefined) {
       continue;
@@ -333,7 +397,7 @@ function renderGroupStandings(groupName, matches) {
     .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team));
 
   const rows = standings.map((team, index) => {
-    const flag = team.flag ? `<img src="${escHtml(team.flag)}" class="flag-icon me-1" alt=""/>` : '';
+    const flag = renderFlagImg(team.flag, team.team, 'me-1');
     return `<tr>
       <td class="text-muted">${index + 1}</td>
       <td>${flag}${escHtml(team.team)}</td>
@@ -403,8 +467,10 @@ function matchCard(m, stage = null) {
 
   const homeTeam = m.homeTeam || 'TBD';
   const awayTeam = m.awayTeam || 'TBD';
-  const homeFlag = m.homeFlag ? `<img src="${escHtml(m.homeFlag)}" class="flag-icon me-1" alt=""/>` : '';
-  const awayFlag = m.awayFlag ? `<img src="${escHtml(m.awayFlag)}" class="flag-icon ms-1" alt=""/>` : '';
+  const homeFlagUrl = resolveFlagUrl(m.homeFlag || '', m.homeTeamCode || '', homeTeam);
+  const awayFlagUrl = resolveFlagUrl(m.awayFlag || '', m.awayTeamCode || '', awayTeam);
+  const homeFlag = renderFlagImg(homeFlagUrl, homeTeam, 'me-1');
+  const awayFlag = renderFlagImg(awayFlagUrl, awayTeam, 'ms-1');
   const dateStr  = formatDateToEuropean(m.date || '');
 
   return `
