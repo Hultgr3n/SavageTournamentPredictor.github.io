@@ -32,9 +32,23 @@ async function buildLeaderboard(myUid) {
   matchSnap.forEach(d => { matches[d.id] = d.data(); });
   const finishedMatches = Object.entries(matches).filter(([, m]) => m.finished);
 
-  // 2. Load all users
-  const usersSnap = await db.collection('users').get();
-  const users = usersSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  // 2. Load users and merge username registry as fallback for legacy visibility.
+  const [usersSnap, usernamesSnap] = await Promise.all([
+    db.collection('users').get(),
+    db.collection('usernames').get()
+  ]);
+
+  const usersByUid = new Map();
+  usersSnap.forEach((d) => {
+    usersByUid.set(d.id, { uid: d.id, ...d.data() });
+  });
+  usernamesSnap.forEach((d) => {
+    const data = d.data() || {};
+    const uid = data.uid;
+    if (!uid || usersByUid.has(uid)) return;
+    usersByUid.set(uid, { uid, username: d.id, isAdmin: false, legacyRegistryOnly: true });
+  });
+  const users = Array.from(usersByUid.values());
 
   if (users.length === 0) {
     container.innerHTML = '<div class="alert alert-info">No users found yet.</div>';

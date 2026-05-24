@@ -213,8 +213,21 @@ async function backfillMissingUsers(silent = false) {
     }
   });
 
+  const diagnostics = {
+    users: usersSnap.size,
+    usernames: usernamesSnap.size,
+    predictionsRoot: predictionsSnap.size,
+    predictionEntries: predictionMatchesSnap.size,
+    missingUsers: missingUserIds.size
+  };
+
   if (missingUserIds.size === 0) {
-    if (!silent) showToast('No missing users found.');
+    if (!silent) {
+      showToast(
+        `No missing users found. users=${diagnostics.users}, usernames=${diagnostics.usernames}, prediction owners=${diagnostics.predictionsRoot}, prediction entries=${diagnostics.predictionEntries}`,
+        'info'
+      );
+    }
     return 0;
   }
 
@@ -245,87 +258,119 @@ async function backfillMissingUsers(silent = false) {
 }
 
 async function backfillUsers() {
-  const created = await backfillMissingUsers(false);
-  if (created > 0) {
-    await loadUsers();
+  try {
+    const created = await backfillMissingUsers(false);
+    if (created > 0) {
+      await loadUsers();
+    }
+  } catch (err) {
+    console.error('Backfill failed:', err);
+    showToast(`Backfill failed: ${err?.message || 'Unknown error'}`, 'danger');
   }
 }
 
 async function loadUsers() {
-  const repaired = await backfillMissingUsers(true);
-  if (repaired > 0) {
-    showToast(`Recovered ${repaired} legacy account${repaired === 1 ? '' : 's'} into users list.`, 'info');
-  }
+  try {
+    const repaired = await backfillMissingUsers(true);
+    if (repaired > 0) {
+      showToast(`Recovered ${repaired} legacy account${repaired === 1 ? '' : 's'} into users list.`, 'info');
+    }
 
-  const snap = await db.collection('users').get();
-  const users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    const [usersSnap, usernamesSnap] = await Promise.all([
+      db.collection('users').get(),
+      db.collection('usernames').get()
+    ]);
 
-  const matchSnap = await db.collection('matches').get();
-  const totalMatches = matchSnap.size;
-
-  const usersWithStats = await Promise.all(users.map(async (u) => {
-    const predSnap = await db.collection('predictions').doc(u.uid).collection('matches').get();
-    const totalPredictions = predSnap.size;
-    let completedPredictions = 0;
-
-    predSnap.forEach((doc) => {
-      const p = doc.data() || {};
-      if (p.home !== null && p.away !== null && p.home !== undefined && p.away !== undefined && p.home !== '' && p.away !== '') {
-        completedPredictions++;
-      }
+    const usersByUid = new Map();
+    usersSnap.forEach((d) => {
+      usersByUid.set(d.id, { uid: d.id, ...d.data() });
     });
 
-    return {
-      ...u,
-      totalPredictions,
-      completedPredictions,
-      hasStarted: totalPredictions > 0,
-      isFullyComplete: totalMatches > 0 && completedPredictions >= totalMatches
-    };
-  }));
+    // Fallback visibility: include accounts that still only exist in username registry.
+    usernamesSnap.forEach((d) => {
+      const data = d.data() || {};
+      const uid = data.uid;
+      if (!uid || usersByUid.has(uid)) return;
+      usersByUid.set(uid, {
+        uid,
+        username: d.id,
+        isAdmin: false,
+        legacyBackfillPreview: true
+      });
+    });
 
-  const startedCount = usersWithStats.filter(u => u.hasStarted).length;
-  const completedCount = usersWithStats.filter(u => u.isFullyComplete).length;
+    const users = Array.from(usersByUid.values());
 
-  document.getElementById('users-summary').innerHTML = `
-    <div class="alert alert-info mb-0">
-      <strong>Accounts:</strong> ${usersWithStats.length}
-      &nbsp;|&nbsp; <strong>Started predictions:</strong> ${startedCount}
-      &nbsp;|&nbsp; <strong>Completed all matches:</strong> ${completedCount}
-      &nbsp;|&nbsp; <strong>Total matches loaded:</strong> ${totalMatches}
-    </div>`;
+    const matchSnap = await db.collection('matches').get();
+    const totalMatches = matchSnap.size;
 
-  const rows = usersWithStats.map(u => `
-    <tr>
-      <td>${escHtml(u.username || '—')}</td>
-      <td>${escHtml(u.uid)}</td>
-      <td>${u.isAdmin ? '✅ Admin' : 'User'}</td>
-      <td>${u.completedPredictions}/${totalMatches || 0}</td>
-      <td>${u.hasStarted ? (u.isFullyComplete ? '✅ Complete' : '🟡 In progress') : '—'}</td>
-      <td>
-        <div class="d-flex gap-2">
-          <button class="btn btn-sm btn-outline-${u.isAdmin ? 'danger' : 'success'}"
-                  onclick="toggleAdmin('${u.uid}', ${!u.isAdmin})">
-            ${u.isAdmin ? 'Remove Admin' : 'Make Admin'}
-          </button>
-          <button class="btn btn-sm btn-outline-danger"
-                  onclick="openRemoveUserModal('${u.uid}', '${escHtml(u.username || '—')}')"
-                  ${u.uid === adminUser.uid ? 'disabled title="You cannot remove your own account."' : ''}>
-            Remove User
-          </button>
-        </div>
-      </td>
-    </tr>`).join('');
+    const usersWithStats = await Promise.all(users.map(async (u) => {
+      const predSnap = await db.collection('predictions').doc(u.uid).collection('matches').get();
+      const totalPredictions = predSnap.size;
+      let completedPredictions = 0;
 
-  document.getElementById('users-table').innerHTML = `
-    <table class="table table-sm">
-      <thead><tr><th>Username</th><th>UID</th><th>Role</th><th>Predictions</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+      predSnap.forEach((doc) => {
+        const p = doc.data() || {};
+        if (p.home !== null && p.away !== null && p.home !== undefined && p.away !== undefined && p.home !== '' && p.away !== '') {
+          completedPredictions++;
+        }
+      });
+
+      return {
+        ...u,
+        totalPredictions,
+        completedPredictions,
+        hasStarted: totalPredictions > 0,
+        isFullyComplete: totalMatches > 0 && completedPredictions >= totalMatches
+      };
+    }));
+
+    const startedCount = usersWithStats.filter(u => u.hasStarted).length;
+    const completedCount = usersWithStats.filter(u => u.isFullyComplete).length;
+
+    document.getElementById('users-summary').innerHTML = `
+      <div class="alert alert-info mb-0">
+        <strong>Accounts:</strong> ${usersWithStats.length}
+        &nbsp;|&nbsp; <strong>Started predictions:</strong> ${startedCount}
+        &nbsp;|&nbsp; <strong>Completed all matches:</strong> ${completedCount}
+        &nbsp;|&nbsp; <strong>Total matches loaded:</strong> ${totalMatches}
+      </div>`;
+
+    const rows = usersWithStats.map(u => `
+      <tr>
+        <td>${escHtml(u.username || '—')}</td>
+        <td>${escHtml(u.uid)}</td>
+        <td>${u.isAdmin ? '✅ Admin' : 'User'}</td>
+        <td>${u.completedPredictions}/${totalMatches || 0}</td>
+        <td>${u.hasStarted ? (u.isFullyComplete ? '✅ Complete' : '🟡 In progress') : '—'}</td>
+        <td>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-${u.isAdmin ? 'danger' : 'success'}"
+                    onclick="toggleAdmin('${u.uid}', ${!u.isAdmin})">
+              ${u.isAdmin ? 'Remove Admin' : 'Make Admin'}
+            </button>
+            <button class="btn btn-sm btn-outline-danger"
+                    onclick="openRemoveUserModal('${u.uid}', '${escHtml(u.username || '—')}')"
+                    ${u.uid === adminUser.uid ? 'disabled title="You cannot remove your own account."' : ''}>
+              Remove User
+            </button>
+          </div>
+        </td>
+      </tr>`).join('');
+
+    document.getElementById('users-table').innerHTML = `
+      <table class="table table-sm">
+        <thead><tr><th>Username</th><th>UID</th><th>Role</th><th>Predictions</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (err) {
+    console.error('Load users failed:', err);
+    showToast(`Load users failed: ${err?.message || 'Unknown error'}`, 'danger');
+  }
 }
 
 async function toggleAdmin(uid, makeAdmin) {
-  await db.collection('users').doc(uid).update({ isAdmin: makeAdmin });
+  await db.collection('users').doc(uid).set({ isAdmin: makeAdmin }, { merge: true });
   showToast(`User updated.`);
   loadUsers();
 }
