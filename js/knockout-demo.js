@@ -9,7 +9,6 @@ let knockoutMatches = [];
 let demoPreds = {};
 let knockoutLocked = false;
 let matchById = new Map();
-const DEMO_COLLECTION = 'predictions_knockout_demo';
 
 const KNOCKOUT_ORDER = ['round32', 'round16', 'qf', 'sf', 'final'];
 const STAGE_LABEL = {
@@ -21,25 +20,34 @@ const STAGE_LABEL = {
 };
 
 (async () => {
-  currentUser = await requireAuth();
-  buildNav(currentUser.username, currentUser.isAdmin);
+  try {
+    currentUser = await requireAuth();
+    buildNav(currentUser.username, currentUser.isAdmin);
 
-  if (!currentUser.isAdmin) {
-    window.location.href = 'predictions.html';
-    return;
+    if (!currentUser.isAdmin) {
+      window.location.href = 'predictions.html';
+      return;
+    }
+
+    settings = await loadSettings();
+    knockoutLocked = isPredictionLocked(settings, 'knockout');
+    if (knockoutLocked) {
+      document.getElementById('lock-banner').classList.remove('d-none');
+      document.getElementById('save-btn').disabled = true;
+      document.getElementById('save-btn').textContent = 'Knockout Locked';
+    }
+
+    await loadDemoData();
+    renderDemoBracket();
+    updateDemoSummary();
+  } catch (err) {
+    console.error('Failed to load knockout demo:', err);
+    const root = document.getElementById('knockout-demo-root');
+    if (root) {
+      root.innerHTML = '<div class="alert alert-danger">Failed to load knockout fixtures. Check Firestore access and data sync.</div>';
+    }
+    showToast(`Load failed: ${err.message || 'unknown error'}`, 'danger');
   }
-
-  settings = await loadSettings();
-  knockoutLocked = isPredictionLocked(settings, 'knockout');
-  if (knockoutLocked) {
-    document.getElementById('lock-banner').classList.remove('d-none');
-    document.getElementById('save-btn').disabled = true;
-    document.getElementById('save-btn').textContent = 'Knockout Locked';
-  }
-
-  await loadDemoData();
-  renderDemoBracket();
-  updateDemoSummary();
 })();
 
 async function loadDemoData() {
@@ -53,13 +61,19 @@ async function loadDemoData() {
   matchById = new Map(knockoutMatches.map((m) => [String(m.id), m]));
 
   const predSnap = await db
-    .collection(DEMO_COLLECTION)
+    .collection('predictions')
     .doc(currentUser.uid)
     .collection('matches')
     .get();
 
   predSnap.forEach((d) => {
-    demoPreds[d.id] = d.data() || {};
+    const data = d.data() || {};
+    if (typeof data.winnerDemo === 'string' && data.winnerDemo.trim()) {
+      demoPreds[d.id] = {
+        winner: data.winnerDemo.trim(),
+        mode: 'winner-only'
+      };
+    }
   });
 }
 
@@ -389,7 +403,7 @@ async function saveAllDemoKnockout() {
       const batch = db.batch();
       for (const [matchId, pred] of entries.slice(i, i + BATCH_SIZE)) {
         const ref = db
-          .collection(DEMO_COLLECTION)
+          .collection('predictions')
           .doc(currentUser.uid)
           .collection('matches')
           .doc(matchId);
@@ -397,9 +411,9 @@ async function saveAllDemoKnockout() {
         batch.set(
           ref,
           {
-            winner: pred.winner || null,
-            mode: 'winner-only',
-            savedAt: firebase.firestore.FieldValue.serverTimestamp()
+            winnerDemo: pred.winner || null,
+            modeDemo: 'winner-only',
+            savedAtDemo: firebase.firestore.FieldValue.serverTimestamp()
           },
           { merge: true }
         );
