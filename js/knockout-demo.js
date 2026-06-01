@@ -11,6 +11,7 @@ let knockoutLocked = false;
 let matchById = new Map();
 let slotByMatchId = new Map();
 let groupSnapshot = new Map();
+let connectorResizeAttached = false;
 
 const KNOCKOUT_ORDER = ['round32', 'round16', 'qf', 'sf', 'final'];
 const STAGE_LABEL = {
@@ -206,6 +207,8 @@ function renderDemoBracket() {
 
   let html = '';
   html += '<div class="ko-demo-wrap ko-demo-wrap-mirror">';
+  html += '<svg class="ko-connector-svg" aria-hidden="true"></svg>';
+  html += '<div class="ko-bracket-layer">';
   html += '<div class="ko-side ko-side-left">';
   html += renderSideStages(left, 'left');
   html += '</div>';
@@ -213,13 +216,13 @@ function renderDemoBracket() {
   if (byStage.final.length > 0) {
     html += '<section class="ko-stage ko-stage-final-center">';
     html += '<header class="ko-stage-title">Final</header>';
-    html += byStage.final.map((m) => renderMatchNode(m)).join('');
+    html += byStage.final.map((m, i) => renderMatchNode(m, { stage: 'final', side: 'center', index: i })).join('');
     html += '</section>';
   }
   if (thirdPlace.length > 0) {
     html += '<section class="ko-stage ko-stage-third-center">';
     html += '<header class="ko-stage-title">Bronze Match</header>';
-    html += thirdPlace.map((m) => renderMatchNode(m)).join('');
+    html += thirdPlace.map((m, i) => renderMatchNode(m, { stage: 'third', side: 'center', index: i })).join('');
     html += '</section>';
   }
   html += '</div>';
@@ -227,9 +230,12 @@ function renderDemoBracket() {
   html += renderSideStages(right, 'right');
   html += '</div>';
   html += '</div>';
+  html += '</div>';
 
   root.innerHTML = html;
   attachWinnerListeners();
+  drawBracketConnectors();
+  attachConnectorResizeHandler();
 }
 
 function renderSideStages(sideMap, sideName) {
@@ -243,14 +249,14 @@ function renderSideStages(sideMap, sideName) {
     html += `<section class="ko-stage ko-stage-${escHtml(stage)} ko-stage-${escHtml(sideName)}">`;
     html += `<header class="ko-stage-title">${escHtml(STAGE_LABEL[stage])}</header>`;
     html += '<div class="ko-stage-matches">';
-    html += matches.map((m) => renderMatchNode(m)).join('');
+    html += matches.map((m, i) => renderMatchNode(m, { stage, side: sideName, index: i })).join('');
     html += '</div></section>';
   }
   html += '</div>';
   return html;
 }
 
-function renderMatchNode(m) {
+function renderMatchNode(m, meta = {}) {
   const stageLocked = isPredictionLocked(settings, 'knockout');
   const isFinished = !!m.finished;
   const disabled = stageLocked || isFinished ? 'disabled' : '';
@@ -272,9 +278,13 @@ function renderMatchNode(m) {
   const dateStr = formatDateToEuropean(m.date || '');
   const homeDesc = getSideDescriptor(m, 'home');
   const awayDesc = getSideDescriptor(m, 'away');
+  const dataStage = escHtml(String(meta.stage || m.type || 'unknown'));
+  const dataSide = escHtml(String(meta.side || 'unknown'));
+  const dataIndex = Number.isFinite(Number(meta.index)) ? Number(meta.index) : 0;
 
   return `
-    <article class="ko-match ${isFinished ? 'ko-match-finished' : ''}">
+    <article class="ko-match ${isFinished ? 'ko-match-finished' : ''}"
+      data-stage="${dataStage}" data-side="${dataSide}" data-index="${dataIndex}" data-match-id="${escHtml(String(m.id))}">
       <div class="ko-meta">${escHtml(dateStr)} ${winnerBadge}</div>
       <div class="ko-team">${renderTeamLabel(homeDesc.rawLabel, homeDesc.flagUrl)}</div>
       <div class="ko-picker">
@@ -617,6 +627,123 @@ function onWinnerChange(e) {
   markDemoUnsaved();
   renderDemoBracket();
   updateDemoSummary();
+}
+
+function attachConnectorResizeHandler() {
+  if (connectorResizeAttached) return;
+  connectorResizeAttached = true;
+  window.addEventListener('resize', () => {
+    drawBracketConnectors();
+  });
+}
+
+function drawBracketConnectors() {
+  const root = document.getElementById('knockout-demo-root');
+  const wrap = root ? root.querySelector('.ko-demo-wrap-mirror') : null;
+  const svg = wrap ? wrap.querySelector('.ko-connector-svg') : null;
+  if (!wrap || !svg) return;
+
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const rect = wrap.getBoundingClientRect();
+  svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
+  svg.setAttribute('width', String(rect.width));
+  svg.setAttribute('height', String(rect.height));
+
+  drawRoundConnections(svg, rect, 'left', 'round32', 'round16');
+  drawRoundConnections(svg, rect, 'left', 'round16', 'qf');
+  drawRoundConnections(svg, rect, 'left', 'qf', 'sf');
+  drawRoundConnections(svg, rect, 'right', 'round32', 'round16');
+  drawRoundConnections(svg, rect, 'right', 'round16', 'qf');
+  drawRoundConnections(svg, rect, 'right', 'qf', 'sf');
+
+  const leftSf = getStageNodes('sf', 'left')[0] || null;
+  const rightSf = getStageNodes('sf', 'right')[0] || null;
+  const finalNode = getStageNodes('final', 'center')[0] || null;
+  const bronzeNode = getStageNodes('third', 'center')[0] || null;
+
+  if (leftSf && finalNode) drawCenterLink(svg, rect, leftSf, finalNode, 'left', 'main');
+  if (rightSf && finalNode) drawCenterLink(svg, rect, rightSf, finalNode, 'right', 'main');
+  if (leftSf && bronzeNode) drawCenterLink(svg, rect, leftSf, bronzeNode, 'left', 'bronze');
+  if (rightSf && bronzeNode) drawCenterLink(svg, rect, rightSf, bronzeNode, 'right', 'bronze');
+}
+
+function getStageNodes(stage, side) {
+  const root = document.getElementById('knockout-demo-root');
+  if (!root) return [];
+  return Array.from(root.querySelectorAll(`.ko-match[data-stage="${stage}"][data-side="${side}"]`))
+    .sort((a, b) => Number(a.dataset.index || 0) - Number(b.dataset.index || 0));
+}
+
+function drawRoundConnections(svg, wrapRect, side, fromStage, toStage) {
+  const from = getStageNodes(fromStage, side);
+  const to = getStageNodes(toStage, side);
+  if (from.length === 0 || to.length === 0) return;
+
+  for (let i = 0; i < to.length; i++) {
+    const a = from[i * 2];
+    const b = from[i * 2 + 1];
+    const t = to[i];
+    if (!a || !b || !t) continue;
+    drawPairPath(svg, wrapRect, side, a, b, t, 'main');
+  }
+}
+
+function drawPairPath(svg, wrapRect, side, nodeA, nodeB, targetNode, type) {
+  const pa = getEdgePoint(nodeA, wrapRect, side === 'left' ? 'right' : 'left');
+  const pb = getEdgePoint(nodeB, wrapRect, side === 'left' ? 'right' : 'left');
+  const pt = getEdgePoint(targetNode, wrapRect, side === 'left' ? 'left' : 'right');
+
+  const fromX = pa.x;
+  const toX = pt.x;
+  const delta = Math.abs(toX - fromX);
+  const span = Math.max(24, Math.min(56, delta * 0.45));
+  const jointX = side === 'left' ? fromX + span : fromX - span;
+  const yTop = Math.min(pa.y, pb.y);
+  const yBottom = Math.max(pa.y, pb.y);
+  const yMid = (pa.y + pb.y) / 2;
+
+  const d = [
+    `M ${pa.x} ${pa.y} H ${jointX}`,
+    `M ${pb.x} ${pb.y} H ${jointX}`,
+    `M ${jointX} ${yTop} V ${yBottom}`,
+    `M ${jointX} ${yMid} H ${pt.x}`,
+    `M ${pt.x} ${yMid} V ${pt.y}`
+  ].join(' ');
+
+  appendPath(svg, d, type);
+}
+
+function drawCenterLink(svg, wrapRect, sideNode, centerNode, side, type) {
+  const from = getEdgePoint(sideNode, wrapRect, side === 'left' ? 'right' : 'left');
+  const to = getEdgePoint(centerNode, wrapRect, side === 'left' ? 'left' : 'right');
+  const delta = Math.abs(to.x - from.x);
+  const span = Math.max(24, Math.min(60, delta * 0.5));
+  const bendX = side === 'left' ? from.x + span : from.x - span;
+  const midY = (from.y + to.y) / 2;
+
+  const d = [
+    `M ${from.x} ${from.y} H ${bendX}`,
+    `M ${bendX} ${from.y} V ${midY}`,
+    `M ${bendX} ${midY} H ${to.x}`,
+    `M ${to.x} ${midY} V ${to.y}`
+  ].join(' ');
+
+  appendPath(svg, d, type);
+}
+
+function appendPath(svg, d, type) {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', d);
+  path.setAttribute('class', type === 'bronze' ? 'ko-connector ko-connector-bronze' : 'ko-connector ko-connector-main');
+  svg.appendChild(path);
+}
+
+function getEdgePoint(node, wrapRect, edge) {
+  const r = node.getBoundingClientRect();
+  const y = r.top - wrapRect.top + (r.height / 2);
+  if (edge === 'left') return { x: r.left - wrapRect.left, y };
+  return { x: r.right - wrapRect.left, y };
 }
 
 function markDemoUnsaved() {

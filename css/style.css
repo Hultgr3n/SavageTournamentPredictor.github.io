@@ -100,10 +100,41 @@ td:first-child {
 
 .ko-demo-wrap-mirror {
   min-width: 1450px;
+  position: relative;
+}
+
+.ko-bracket-layer {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: 1fr 230px 1fr;
   gap: 16px;
   align-items: start;
+}
+
+.ko-connector-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.ko-connector {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ko-connector-main {
+  stroke: rgba(132, 184, 247, 0.68);
+  stroke-width: 2;
+}
+
+.ko-connector-bronze {
+  stroke: rgba(233, 187, 101, 0.75);
+  stroke-width: 1.8;
+  stroke-dasharray: 5 5;
 }
 
 .ko-side-grid {
@@ -161,65 +192,6 @@ td:first-child {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.ko-stage-left .ko-match,
-.ko-stage-right .ko-match {
-  position: relative;
-}
-
-.ko-stage-left .ko-match::after,
-.ko-stage-right .ko-match::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 14px;
-  border-top: 2px solid rgba(122, 164, 218, 0.5);
-}
-
-.ko-stage-left .ko-match::after {
-  right: -14px;
-}
-
-.ko-stage-right .ko-match::after {
-  left: -14px;
-}
-
-.ko-stage-left .ko-match:nth-child(odd)::before,
-.ko-stage-left .ko-match:nth-child(even)::before,
-.ko-stage-right .ko-match:nth-child(odd)::before,
-.ko-stage-right .ko-match:nth-child(even)::before {
-  content: "";
-  position: absolute;
-  width: 0;
-  border-left: 2px solid rgba(122, 164, 218, 0.5);
-}
-
-.ko-stage-left .ko-match:nth-child(odd)::before,
-.ko-stage-right .ko-match:nth-child(odd)::before {
-  top: 50%;
-  height: calc(50% + 14px);
-}
-
-.ko-stage-left .ko-match:nth-child(even)::before,
-.ko-stage-right .ko-match:nth-child(even)::before {
-  top: calc(-50% - 14px);
-  height: calc(50% + 14px);
-}
-
-.ko-stage-left .ko-match:nth-child(odd)::before,
-.ko-stage-left .ko-match:nth-child(even)::before {
-  right: -14px;
-}
-
-.ko-stage-right .ko-match:nth-child(odd)::before,
-.ko-stage-right .ko-match:nth-child(even)::before {
-  left: -14px;
-}
-
-.ko-stage-left.ko-stage-sf .ko-match::before,
-.ko-stage-right.ko-stage-sf .ko-match::before {
-  display: none;
 }
 
 .ko-stage-round16 .ko-stage-matches {
@@ -297,6 +269,9 @@ td:first-child {
 
   .ko-demo-wrap-mirror {
     min-width: 1320px;
+  }
+
+  .ko-bracket-layer {
     grid-template-columns: 1fr 220px 1fr;
   }
 
