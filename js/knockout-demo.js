@@ -594,9 +594,12 @@ function getActualWinnerSide(m) {
 function isThirdPlaceMatch(m) {
   const type = String(m.type || '').toLowerCase();
   if (type.includes('third') || type.includes('bronze')) return true;
+  if (String(m.id || '') === '103') return true;
   const home = String(m.homeTeam || '').toLowerCase();
   const away = String(m.awayTeam || '').toLowerCase();
-  return home.includes('loser match') || away.includes('loser match');
+  return home.includes('loser match') || away.includes('loser match') ||
+    home.includes('runner-up match') || away.includes('runner-up match') ||
+    home.includes('runner up match') || away.includes('runner up match');
 }
 
 function attachWinnerListeners() {

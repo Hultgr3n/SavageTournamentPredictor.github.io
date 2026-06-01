@@ -95,6 +95,7 @@ td:first-child {
   border: 1px solid #1e2a3d;
   padding: 16px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ko-demo-wrap-mirror {
@@ -112,6 +113,10 @@ td:first-child {
   align-items: start;
 }
 
+.ko-side-grid > .ko-stage {
+  min-width: 190px;
+}
+
 .ko-side-right .ko-side-grid {
   grid-template-columns: repeat(4, minmax(180px, 1fr));
 }
@@ -120,12 +125,14 @@ td:first-child {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding-top: 64px;
+  padding-top: 74px;
+  align-items: center;
 }
 
 .ko-stage-final-center,
 .ko-stage-third-center {
-  min-width: 220px;
+  min-width: 240px;
+  width: 100%;
 }
 
 .ko-demo-grid {
@@ -154,6 +161,65 @@ td:first-child {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.ko-stage-left .ko-match,
+.ko-stage-right .ko-match {
+  position: relative;
+}
+
+.ko-stage-left .ko-match::after,
+.ko-stage-right .ko-match::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  border-top: 2px solid rgba(122, 164, 218, 0.5);
+}
+
+.ko-stage-left .ko-match::after {
+  right: -14px;
+}
+
+.ko-stage-right .ko-match::after {
+  left: -14px;
+}
+
+.ko-stage-left .ko-match:nth-child(odd)::before,
+.ko-stage-left .ko-match:nth-child(even)::before,
+.ko-stage-right .ko-match:nth-child(odd)::before,
+.ko-stage-right .ko-match:nth-child(even)::before {
+  content: "";
+  position: absolute;
+  width: 0;
+  border-left: 2px solid rgba(122, 164, 218, 0.5);
+}
+
+.ko-stage-left .ko-match:nth-child(odd)::before,
+.ko-stage-right .ko-match:nth-child(odd)::before {
+  top: 50%;
+  height: calc(50% + 14px);
+}
+
+.ko-stage-left .ko-match:nth-child(even)::before,
+.ko-stage-right .ko-match:nth-child(even)::before {
+  top: calc(-50% - 14px);
+  height: calc(50% + 14px);
+}
+
+.ko-stage-left .ko-match:nth-child(odd)::before,
+.ko-stage-left .ko-match:nth-child(even)::before {
+  right: -14px;
+}
+
+.ko-stage-right .ko-match:nth-child(odd)::before,
+.ko-stage-right .ko-match:nth-child(even)::before {
+  left: -14px;
+}
+
+.ko-stage-left.ko-stage-sf .ko-match::before,
+.ko-stage-right.ko-stage-sf .ko-match::before {
+  display: none;
 }
 
 .ko-stage-round16 .ko-stage-matches {
@@ -225,18 +291,17 @@ td:first-child {
 }
 
 @media (max-width: 992px) {
-  .ko-demo-wrap-mirror {
-    min-width: 0;
-    grid-template-columns: 1fr;
+  .ko-demo-wrap {
+    padding: 12px;
   }
 
-  .ko-side-grid,
-  .ko-side-right .ko-side-grid {
-    grid-template-columns: 1fr;
+  .ko-demo-wrap-mirror {
+    min-width: 1320px;
+    grid-template-columns: 1fr 220px 1fr;
   }
 
   .ko-center {
-    padding-top: 0;
+    padding-top: 60px;
   }
 
   .ko-demo-grid {
