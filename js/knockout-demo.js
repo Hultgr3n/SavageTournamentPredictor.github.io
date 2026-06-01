@@ -194,9 +194,18 @@ function renderDemoBracket() {
     byStage[stage].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   }
 
-  const branch = buildBracketBranches();
-  const left = branch.left;
-  const right = branch.right;
+  const left = {
+    round32: byStage.round32.slice(0, Math.ceil(byStage.round32.length / 2)),
+    round16: byStage.round16.slice(0, Math.ceil(byStage.round16.length / 2)),
+    qf: byStage.qf.slice(0, Math.ceil(byStage.qf.length / 2)),
+    sf: byStage.sf.slice(0, Math.ceil(byStage.sf.length / 2))
+  };
+  const right = {
+    round32: byStage.round32.slice(Math.ceil(byStage.round32.length / 2)).reverse(),
+    round16: byStage.round16.slice(Math.ceil(byStage.round16.length / 2)).reverse(),
+    qf: byStage.qf.slice(Math.ceil(byStage.qf.length / 2)).reverse(),
+    sf: byStage.sf.slice(Math.ceil(byStage.sf.length / 2)).reverse()
+  };
 
   let html = '';
   html += '<div class="ko-demo-wrap ko-demo-wrap-mirror">';
@@ -234,7 +243,9 @@ function renderDemoBracket() {
 }
 
 function renderSideStages(sideMap, sideName) {
-  const stageOrder = ['round32', 'round16', 'qf', 'sf'];
+  const stageOrder = sideName === 'right'
+    ? ['sf', 'qf', 'round16', 'round32']
+    : ['round32', 'round16', 'qf', 'sf'];
   let html = '<div class="ko-side-grid">';
   for (const stage of stageOrder) {
     const matches = sideMap[stage] || [];
