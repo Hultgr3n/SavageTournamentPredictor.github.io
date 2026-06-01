@@ -185,6 +185,14 @@ async function loadDemoData() {
       };
       return;
     }
+    // Also accept the canonical winnerSide field written by the save function
+    if (typeof data.winnerSide === 'string' && (data.winnerSide === 'home' || data.winnerSide === 'away')) {
+      demoPreds[d.id] = {
+        winnerSide: data.winnerSide,
+        mode: 'winner-only'
+      };
+      return;
+    }
     if (typeof data.winnerDemo === 'string' && data.winnerDemo.trim()) {
       const inferredSide = inferWinnerSideFromLegacyValue(String(d.id), data.winnerDemo.trim());
       demoPreds[d.id] = {
@@ -1027,6 +1035,7 @@ async function saveAllDemoKnockout() {
         batch.set(
           ref,
           {
+            winnerSide: pred.winnerSide || null,
             winnerSideDemo: pred.winnerSide || null,
             winnerDemo: pred.winnerSide || null,
             modeDemo: 'winner-only',
@@ -1046,6 +1055,6 @@ async function saveAllDemoKnockout() {
     showToast(`Save failed: ${err.message}`, 'danger');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Save Demo Knockout Picks';
+    btn.textContent = 'Save Knockout Predictions';
   }
 }

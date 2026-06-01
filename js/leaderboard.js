@@ -50,6 +50,17 @@ function scoreKnockoutPrediction(pred, match) {
     return predictedWinner === actualWinner ? weight : 0;
   }
 
+  // Side prediction ('home' | 'away') from bracket page
+  const predictedSide = String(pred?.winnerSide || '').trim();
+  if (predictedSide === 'home' || predictedSide === 'away') {
+    const predictedTeam = predictedSide === 'home'
+      ? String(match.homeTeam || '').trim()
+      : String(match.awayTeam || '').trim();
+    if (!predictedTeam) return null;
+    const weight = match.type === 'final' ? 5 : 1;
+    return predictedTeam === actualWinner ? weight : 0;
+  }
+
   // Legacy fallback for old knockout score entries.
   const predHome = pred?.home;
   const predAway = pred?.away;
