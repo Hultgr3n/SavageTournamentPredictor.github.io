@@ -782,7 +782,16 @@ function alignSideStages(side, wrapRect) {
 
       const targetY = (getNodeCenterY(a, wrapRect) + getNodeCenterY(b, wrapRect)) / 2;
       const currentY = getNodeCenterY(node, wrapRect);
-      const delta = targetY - currentY;
+      let delta = targetY - currentY;
+
+      // Right side needs an additional visual drop for inward rounds
+      // so the bracket mirrors FIFA's centered funnel.
+      if (side === 'right') {
+        const h = node.getBoundingClientRect().height || 120;
+        if (toStage === 'qf') delta += Math.round(h * 0.35);
+        if (toStage === 'sf') delta += Math.round(h * 0.7);
+      }
+
       node.dataset.translateY = String(delta);
       setMatchTranslateY(node, delta);
     }
