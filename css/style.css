@@ -97,6 +97,37 @@ td:first-child {
   overflow-x: auto;
 }
 
+.ko-demo-wrap-mirror {
+  min-width: 1450px;
+  display: grid;
+  grid-template-columns: 1fr 230px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.ko-side-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.ko-side-right .ko-side-grid {
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+}
+
+.ko-center {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 64px;
+}
+
+.ko-stage-final-center,
+.ko-stage-third-center {
+  min-width: 220px;
+}
+
 .ko-demo-grid {
   min-width: 1100px;
   display: grid;
@@ -142,6 +173,10 @@ td:first-child {
 
 .ko-stage-final .ko-stage-matches {
   padding-top: 132px;
+}
+
+.ko-stage-right .ko-stage-matches {
+  align-items: stretch;
 }
 
 .ko-match {
@@ -190,6 +225,20 @@ td:first-child {
 }
 
 @media (max-width: 992px) {
+  .ko-demo-wrap-mirror {
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .ko-side-grid,
+  .ko-side-right .ko-side-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ko-center {
+    padding-top: 0;
+  }
+
   .ko-demo-grid {
     min-width: 0;
     grid-template-columns: 1fr;
