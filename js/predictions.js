@@ -145,6 +145,9 @@ const KNOCKOUT_TEMPLATE = {
 (async () => {
   currentUser = await requireAuth();
   buildNav(currentUser.username, currentUser.isAdmin);
+  if (currentUser.isAdmin) {
+    document.getElementById('knockout-demo-link')?.classList.remove('d-none');
+  }
 
   settings = await loadSettings();
   locked = isPredictionLocked(settings);

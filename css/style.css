@@ -87,3 +87,119 @@ body {
 td:first-child {
   font-size: 1.1rem;
 }
+
+/* Knockout demo bracket */
+.ko-demo-wrap {
+  background: radial-gradient(circle at 50% 10%, #181f2b, #06090f 72%);
+  border-radius: 12px;
+  border: 1px solid #1e2a3d;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.ko-demo-grid {
+  min-width: 1100px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(200px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.ko-stage {
+  position: relative;
+}
+
+.ko-stage-title {
+  color: #ecf2ff;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.8rem;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.ko-stage-matches {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ko-stage-round16 .ko-stage-matches {
+  padding-top: 20px;
+  gap: 18px;
+}
+
+.ko-stage-qf .ko-stage-matches {
+  padding-top: 34px;
+  gap: 34px;
+}
+
+.ko-stage-sf .ko-stage-matches {
+  padding-top: 54px;
+  gap: 56px;
+}
+
+.ko-stage-final .ko-stage-matches {
+  padding-top: 132px;
+}
+
+.ko-match {
+  border-radius: 10px;
+  border: 1px solid #2f4058;
+  background: linear-gradient(165deg, #111923, #0b1019);
+  padding: 10px;
+  color: #eef4ff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.ko-match-finished {
+  border-color: #1f8d55;
+}
+
+.ko-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.72rem;
+  color: #a9bddb;
+}
+
+.ko-team {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  font-size: 0.86rem;
+}
+
+.ko-picker {
+  margin: 6px 0;
+}
+
+.ko-winner-select {
+  border: 1px solid #3d4f69;
+  background-color: #f8fbff;
+  color: #172335;
+  font-weight: 600;
+}
+
+.ko-winner-select:disabled {
+  background-color: #dce3ee;
+}
+
+@media (max-width: 992px) {
+  .ko-demo-grid {
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .ko-stage-round16 .ko-stage-matches,
+  .ko-stage-qf .ko-stage-matches,
+  .ko-stage-sf .ko-stage-matches,
+  .ko-stage-final .ko-stage-matches {
+    padding-top: 0;
+    gap: 10px;
+  }
+}

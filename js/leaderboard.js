@@ -23,6 +23,49 @@ function attachLeaderboardAutoRefresh(myUid) {
   db.collection('users').onSnapshot(() => scheduleLeaderboardRefresh(myUid));
 }
 
+function getActualWinnerName(match) {
+  if (!match || !match.finished) return '';
+
+  const explicitWinner = String(
+    match.winnerTeam || match.winner_team_name || match.winner || match.winnerName || ''
+  ).trim();
+  if (explicitWinner) return explicitWinner;
+
+  const home = Number(match.actualHome);
+  const away = Number(match.actualAway);
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return '';
+  if (home > away) return String(match.homeTeam || '').trim();
+  if (away > home) return String(match.awayTeam || '').trim();
+  return '';
+}
+
+function scoreKnockoutPrediction(pred, match) {
+  if (!match || !match.finished) return null;
+  const actualWinner = getActualWinnerName(match);
+  if (!actualWinner) return null;
+
+  const predictedWinner = String(pred?.winner || '').trim();
+  if (predictedWinner) {
+    const weight = match.type === 'final' ? 5 : 1;
+    return predictedWinner === actualWinner ? weight : 0;
+  }
+
+  // Legacy fallback for old knockout score entries.
+  const predHome = pred?.home;
+  const predAway = pred?.away;
+  if (predHome === null || predAway === null || predHome === undefined || predAway === undefined) {
+    return null;
+  }
+
+  const ph = Number(predHome);
+  const pa = Number(predAway);
+  if (!Number.isFinite(ph) || !Number.isFinite(pa) || ph === pa) return null;
+
+  const predictedByScore = ph > pa ? String(match.homeTeam || '').trim() : String(match.awayTeam || '').trim();
+  const weight = match.type === 'final' ? 5 : 1;
+  return predictedByScore === actualWinner ? weight : 0;
+}
+
 async function buildLeaderboard(myUid) {
   const container = document.getElementById('leaderboard-container');
 
@@ -69,11 +112,18 @@ async function buildLeaderboard(myUid) {
     for (const [matchId, m] of finishedMatches) {
       const pred = preds[matchId];
       if (!pred) continue;
-      const pts = calcPoints(pred.home, pred.away, m.actualHome, m.actualAway, true);
+
+      let pts = null;
+      if (m.type === 'group') {
+        pts = calcPoints(pred.home, pred.away, m.actualHome, m.actualAway, true);
+      } else {
+        pts = scoreKnockoutPrediction(pred, m);
+      }
+
       if (pts === null) continue;
       totalPts += pts;
       predicted++;
-      if (pts === 3 && Number(pred.home) === Number(m.actualHome) && Number(pred.away) === Number(m.actualAway)) {
+      if (m.type === 'group' && pts === 3 && Number(pred.home) === Number(m.actualHome) && Number(pred.away) === Number(m.actualAway)) {
         exactScores++;
       }
     }
@@ -122,14 +172,15 @@ async function buildLeaderboard(myUid) {
             <th>Player</th>
             <th class="text-center">Points</th>
             <th class="text-center">Predicted</th>
-            <th class="text-center">Exact Scores 🎯</th>
+            <th class="text-center">Exact Group Scores 🎯</th>
           </tr>
         </thead>
         <tbody>${tableRows}</tbody>
       </table>
     </div>
-    <p class="text-muted small">Points: 1 per correct goal, 1 for correct outcome (W/D/L). Max 3 per match.
-    Exact score = both goals + outcome correct. Tiebreaker: most exact scores.</p>`;
+    <p class="text-muted small">Group stage: 1 per correct goal + 1 for correct outcome (max 3 per match).
+    Knockout stage: correct winner = 1 point, and correct tournament winner (final) = 5 points.
+    Tiebreaker: most exact group scores.</p>`;
 
   document.getElementById('last-updated').textContent =
     finishedMatches.length === 0
