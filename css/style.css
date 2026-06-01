@@ -240,6 +240,19 @@ td:first-child {
   color: #a9bddb;
 }
 
+.ko-match-num {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #5a84b8;
+  background: rgba(90, 132, 184, 0.12);
+  border: 1px solid rgba(90, 132, 184, 0.25);
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .ko-team {
   display: flex;
   align-items: center;

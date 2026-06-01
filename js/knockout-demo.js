@@ -391,7 +391,7 @@ function renderMatchNode(m, meta = {}) {
   return `
     <article class="ko-match ${isFinished ? 'ko-match-finished' : ''}"
       data-stage="${dataStage}" data-side="${dataSide}" data-index="${dataIndex}" data-match-id="${escHtml(String(m.id))}">
-      <div class="ko-meta">${escHtml(dateStr)} ${winnerBadge}</div>
+      <div class="ko-meta"><span class="ko-match-num">M${escHtml(String(m.id))}</span> ${escHtml(dateStr)} ${winnerBadge}</div>
       <div class="ko-team">${renderTeamLabel(homeDesc.rawLabel, homeDesc.flagUrl)}</div>
       <div class="ko-picker">
         <select class="form-select form-select-sm ko-winner-select"
@@ -530,11 +530,12 @@ function getPredictedWinnerSideByMatchId(matchId) {
 }
 
 function getWinnerOptionsForMatchRecursive(match, visitedMatchIds) {
-  const home = getSideDescriptor(match, 'home', visitedMatchIds).rawLabel;
-  const away = getSideDescriptor(match, 'away', visitedMatchIds).rawLabel;
+  // Use copies so getSideDescriptor traversal doesn't contaminate the set used for final resolution
+  const home = getSideDescriptor(match, 'home', new Set(visitedMatchIds)).rawLabel;
+  const away = getSideDescriptor(match, 'away', new Set(visitedMatchIds)).rawLabel;
   const out = new Set();
   for (const token of [home, away]) {
-    const nested = resolvePossibleTeamsFromPlaceholder(token, visitedMatchIds);
+    const nested = resolvePossibleTeamsFromPlaceholder(token, new Set(visitedMatchIds));
     nested.forEach((t) => out.add(t));
   }
 
