@@ -214,13 +214,13 @@ function renderDemoBracket() {
   html += '</div>';
   html += '<div class="ko-center">';
   if (byStage.final.length > 0) {
-    html += '<section class="ko-stage ko-stage-final-center">';
+    html += '<section class="ko-stage ko-stage-final-center" data-center-stage="final">';
     html += '<header class="ko-stage-title">Final</header>';
     html += byStage.final.map((m, i) => renderMatchNode(m, { stage: 'final', side: 'center', index: i })).join('');
     html += '</section>';
   }
   if (thirdPlace.length > 0) {
-    html += '<section class="ko-stage ko-stage-third-center">';
+    html += '<section class="ko-stage ko-stage-third-center" data-center-stage="third">';
     html += '<header class="ko-stage-title">Bronze Match</header>';
     html += thirdPlace.map((m, i) => renderMatchNode(m, { stage: 'third', side: 'center', index: i })).join('');
     html += '</section>';
@@ -234,6 +234,7 @@ function renderDemoBracket() {
 
   root.innerHTML = html;
   attachWinnerListeners();
+  alignBracketColumns();
   drawBracketConnectors();
   attachConnectorResizeHandler();
 }
@@ -246,7 +247,7 @@ function renderSideStages(sideMap, sideName) {
   for (const stage of stageOrder) {
     const matches = sideMap[stage] || [];
     if (matches.length === 0) continue;
-    html += `<section class="ko-stage ko-stage-${escHtml(stage)} ko-stage-${escHtml(sideName)}">`;
+    html += `<section class="ko-stage ko-stage-${escHtml(stage)} ko-stage-${escHtml(sideName)}" data-stage-group="${escHtml(stage)}" data-stage-side="${escHtml(sideName)}">`;
     html += `<header class="ko-stage-title">${escHtml(STAGE_LABEL[stage])}</header>`;
     html += '<div class="ko-stage-matches">';
     html += matches.map((m, i) => renderMatchNode(m, { stage, side: sideName, index: i })).join('');
@@ -633,8 +634,86 @@ function attachConnectorResizeHandler() {
   if (connectorResizeAttached) return;
   connectorResizeAttached = true;
   window.addEventListener('resize', () => {
+    alignBracketColumns();
     drawBracketConnectors();
   });
+}
+
+function setStageTranslateY(section, y) {
+  if (!section) return;
+  section.style.transform = `translateY(${Math.round(y)}px)`;
+}
+
+function getNodeCenterY(node, wrapRect) {
+  const r = node.getBoundingClientRect();
+  return r.top - wrapRect.top + (r.height / 2);
+}
+
+function alignBracketColumns() {
+  const root = document.getElementById('knockout-demo-root');
+  const wrap = root ? root.querySelector('.ko-demo-wrap-mirror') : null;
+  if (!wrap) return;
+
+  // Reset transforms before recalculating.
+  wrap.querySelectorAll('[data-stage-group], [data-center-stage]').forEach((el) => {
+    el.style.transform = 'translateY(0px)';
+  });
+
+  const wrapRect = wrap.getBoundingClientRect();
+  alignSideStages('left', wrapRect);
+  alignSideStages('right', wrapRect);
+  alignCenterStages(wrapRect);
+}
+
+function alignSideStages(side, wrapRect) {
+  const transitions = [
+    ['round32', 'round16'],
+    ['round16', 'qf'],
+    ['qf', 'sf']
+  ];
+
+  for (const [fromStage, toStage] of transitions) {
+    const fromNodes = getStageNodes(fromStage, side);
+    const toNodes = getStageNodes(toStage, side);
+    const section = document.querySelector(`.ko-stage-${toStage}.ko-stage-${side}[data-stage-group="${toStage}"]`);
+    if (!section || fromNodes.length < 2 || toNodes.length === 0) continue;
+
+    const targetY = (getNodeCenterY(fromNodes[0], wrapRect) + getNodeCenterY(fromNodes[1], wrapRect)) / 2;
+    const currentY = getNodeCenterY(toNodes[0], wrapRect);
+    const existing = Number(section.dataset.translateY || 0);
+    const delta = targetY - currentY;
+    const next = existing + delta;
+    section.dataset.translateY = String(next);
+    setStageTranslateY(section, next);
+  }
+}
+
+function alignCenterStages(wrapRect) {
+  const leftSf = getStageNodes('sf', 'left')[0] || null;
+  const rightSf = getStageNodes('sf', 'right')[0] || null;
+  const finalSection = document.querySelector('[data-center-stage="final"]');
+  const bronzeSection = document.querySelector('[data-center-stage="third"]');
+  const finalNode = getStageNodes('final', 'center')[0] || null;
+
+  if (finalSection && finalNode && leftSf && rightSf) {
+    const target = (getNodeCenterY(leftSf, wrapRect) + getNodeCenterY(rightSf, wrapRect)) / 2;
+    const current = getNodeCenterY(finalNode, wrapRect);
+    const delta = target - current;
+    finalSection.dataset.translateY = String(delta);
+    setStageTranslateY(finalSection, delta);
+  }
+
+  if (bronzeSection) {
+    const finalRect = finalSection ? finalSection.getBoundingClientRect() : null;
+    const bronzeRect = bronzeSection.getBoundingClientRect();
+    if (finalRect) {
+      const targetTop = finalRect.bottom - wrapRect.top + 20;
+      const currentTop = bronzeRect.top - wrapRect.top;
+      const delta = targetTop - currentTop;
+      bronzeSection.dataset.translateY = String(delta);
+      setStageTranslateY(bronzeSection, delta);
+    }
+  }
 }
 
 function drawBracketConnectors() {
