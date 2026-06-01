@@ -12,6 +12,8 @@ let matchById = new Map();
 let slotByMatchId = new Map();
 let groupSnapshot = new Map();
 let connectorResizeAttached = false;
+let connectorResizeObserver = null;
+let relayoutRafId = 0;
 
 const KNOCKOUT_ORDER = ['round32', 'round16', 'qf', 'sf', 'final'];
 const STAGE_LABEL = {
@@ -237,6 +239,7 @@ function renderDemoBracket() {
   alignBracketColumns();
   drawBracketConnectors();
   attachConnectorResizeHandler();
+  scheduleBracketRelayout();
 }
 
 function renderSideStages(sideMap, sideName) {
@@ -633,7 +636,25 @@ function onWinnerChange(e) {
 function attachConnectorResizeHandler() {
   if (connectorResizeAttached) return;
   connectorResizeAttached = true;
-  window.addEventListener('resize', () => {
+  window.addEventListener('resize', scheduleBracketRelayout);
+
+  const root = document.getElementById('knockout-demo-root');
+  const wrap = root ? root.querySelector('.ko-demo-wrap-mirror') : null;
+  if (!wrap) return;
+
+  if (connectorResizeObserver) {
+    connectorResizeObserver.disconnect();
+  }
+  connectorResizeObserver = new ResizeObserver(() => {
+    scheduleBracketRelayout();
+  });
+  connectorResizeObserver.observe(wrap);
+}
+
+function scheduleBracketRelayout() {
+  if (relayoutRafId) cancelAnimationFrame(relayoutRafId);
+  relayoutRafId = requestAnimationFrame(() => {
+    relayoutRafId = 0;
     alignBracketColumns();
     drawBracketConnectors();
   });
@@ -657,6 +678,7 @@ function alignBracketColumns() {
   // Reset transforms before recalculating.
   wrap.querySelectorAll('[data-stage-group], [data-center-stage]').forEach((el) => {
     el.style.transform = 'translateY(0px)';
+    el.dataset.translateY = '0';
   });
 
   const wrapRect = wrap.getBoundingClientRect();
@@ -680,11 +702,9 @@ function alignSideStages(side, wrapRect) {
 
     const targetY = (getNodeCenterY(fromNodes[0], wrapRect) + getNodeCenterY(fromNodes[1], wrapRect)) / 2;
     const currentY = getNodeCenterY(toNodes[0], wrapRect);
-    const existing = Number(section.dataset.translateY || 0);
     const delta = targetY - currentY;
-    const next = existing + delta;
-    section.dataset.translateY = String(next);
-    setStageTranslateY(section, next);
+    section.dataset.translateY = String(delta);
+    setStageTranslateY(section, delta);
   }
 }
 
