@@ -194,18 +194,9 @@ function renderDemoBracket() {
     byStage[stage].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   }
 
-  const left = {
-    round32: byStage.round32.slice(0, Math.ceil(byStage.round32.length / 2)),
-    round16: byStage.round16.slice(0, Math.ceil(byStage.round16.length / 2)),
-    qf: byStage.qf.slice(0, Math.ceil(byStage.qf.length / 2)),
-    sf: byStage.sf.slice(0, Math.ceil(byStage.sf.length / 2))
-  };
-  const right = {
-    round32: byStage.round32.slice(Math.ceil(byStage.round32.length / 2)).reverse(),
-    round16: byStage.round16.slice(Math.ceil(byStage.round16.length / 2)).reverse(),
-    qf: byStage.qf.slice(Math.ceil(byStage.qf.length / 2)).reverse(),
-    sf: byStage.sf.slice(Math.ceil(byStage.sf.length / 2)).reverse()
-  };
+  const branch = buildBracketBranches();
+  const left = branch.left;
+  const right = branch.right;
 
   let html = '';
   html += '<div class="ko-demo-wrap ko-demo-wrap-mirror">';
@@ -243,9 +234,7 @@ function renderDemoBracket() {
 }
 
 function renderSideStages(sideMap, sideName) {
-  const stageOrder = sideName === 'right'
-    ? ['sf', 'qf', 'round16', 'round32']
-    : ['round32', 'round16', 'qf', 'sf'];
+  const stageOrder = ['round32', 'round16', 'qf', 'sf'];
   let html = '<div class="ko-side-grid">';
   for (const stage of stageOrder) {
     const matches = sideMap[stage] || [];
@@ -258,6 +247,70 @@ function renderSideStages(sideMap, sideName) {
   }
   html += '</div>';
   return html;
+}
+
+function buildEmptyBracketSide() {
+  return { round32: [], round16: [], qf: [], sf: [] };
+}
+
+function getReferencedWinnerMatchIds(matchId) {
+  const slot = slotByMatchId.get(String(matchId));
+  if (!slot) return [];
+  const refs = [];
+  for (const token of [slot.home, slot.away]) {
+    const t = normalizeSlotToken(token);
+    const m = t.match(/^W(\d+)$/i);
+    if (m) refs.push(String(m[1]));
+  }
+  return refs;
+}
+
+function collectBranchMatches(rootMatchId, sideBucket, seen = new Set()) {
+  const id = String(rootMatchId || '');
+  if (!id || seen.has(id)) return;
+  seen.add(id);
+
+  const childRefs = getReferencedWinnerMatchIds(id);
+  if (childRefs.length > 0) {
+    collectBranchMatches(childRefs[0], sideBucket, seen);
+    collectBranchMatches(childRefs[1], sideBucket, seen);
+  }
+
+  const m = matchById.get(id);
+  if (!m) return;
+  if (m.type === 'round32' || m.type === 'round16' || m.type === 'qf' || m.type === 'sf') {
+    const list = sideBucket[m.type];
+    if (list && !list.some((x) => String(x.id) === id)) {
+      list.push(m);
+    }
+  }
+}
+
+function buildBracketBranches() {
+  const left = buildEmptyBracketSide();
+  const right = buildEmptyBracketSide();
+
+  const sfMatches = knockoutMatches
+    .filter((m) => m.type === 'sf')
+    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+
+  if (sfMatches.length >= 2) {
+    collectBranchMatches(String(sfMatches[0].id), left);
+    collectBranchMatches(String(sfMatches[1].id), right);
+  } else {
+    // Fallback if fixture data is incomplete.
+    left.round32 = knockoutMatches.filter((m) => m.type === 'round32').slice(0, 8);
+    left.round16 = knockoutMatches.filter((m) => m.type === 'round16').slice(0, 4);
+    left.qf = knockoutMatches.filter((m) => m.type === 'qf').slice(0, 2);
+    left.sf = knockoutMatches.filter((m) => m.type === 'sf').slice(0, 1);
+
+    right.round32 = knockoutMatches.filter((m) => m.type === 'round32').slice(8);
+    right.round16 = knockoutMatches.filter((m) => m.type === 'round16').slice(4);
+    right.qf = knockoutMatches.filter((m) => m.type === 'qf').slice(2);
+    right.sf = knockoutMatches.filter((m) => m.type === 'sf').slice(1);
+  }
+
+  return { left, right };
 }
 
 function renderMatchNode(m, meta = {}) {
@@ -737,18 +790,18 @@ function alignCenterStages(wrapRect) {
     const target = (getNodeCenterY(leftSf, wrapRect) + getNodeCenterY(rightSf, wrapRect)) / 2;
     const current = getNodeCenterY(finalNode, wrapRect);
     const delta = target - current;
-    finalNode.dataset.translateY = String(delta);
-    setMatchTranslateY(finalNode, delta);
+    finalSection.dataset.translateY = String(delta);
+    setStageTranslateY(finalSection, delta);
   }
 
   if (bronzeSection && bronzeNode && finalNode) {
-    const finalRect = finalNode.getBoundingClientRect();
+    const finalRect = finalSection ? finalSection.getBoundingClientRect() : finalNode.getBoundingClientRect();
     const bronzeRect = bronzeNode.getBoundingClientRect();
     const targetTop = finalRect.bottom - wrapRect.top + 28;
     const currentTop = bronzeRect.top - wrapRect.top;
     const delta = targetTop - currentTop;
-    bronzeNode.dataset.translateY = String(delta);
-    setMatchTranslateY(bronzeNode, delta);
+    bronzeSection.dataset.translateY = String(delta);
+    setStageTranslateY(bronzeSection, delta);
   }
 }
 
