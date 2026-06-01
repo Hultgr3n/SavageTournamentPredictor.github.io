@@ -820,14 +820,7 @@ function alignSideStages(side, wrapRect) {
 
       const targetY = (getNodeCenterY(a, wrapRect) + getNodeCenterY(b, wrapRect)) / 2;
       const currentY = getNodeCenterY(node, wrapRect);
-      let delta = targetY - currentY;
-
-      // Nudge only the top-right branch inward rounds so the right side mirrors left.
-      if (side === 'right') {
-        const h = node.getBoundingClientRect().height || 120;
-        if (toStage === 'qf' && i === 0) delta += Math.round(h * 0.55);
-        if (toStage === 'sf' && i === 0) delta += Math.round(h * 0.95);
-      }
+      const delta = targetY - currentY;
 
       node.dataset.translateY = String(delta);
       setMatchTranslateY(node, delta);
