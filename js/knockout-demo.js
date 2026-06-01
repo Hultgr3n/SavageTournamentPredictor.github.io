@@ -825,8 +825,8 @@ function alignSideStages(side, wrapRect) {
       // Nudge only the top-right branch inward rounds so the right side mirrors left.
       if (side === 'right') {
         const h = node.getBoundingClientRect().height || 120;
-        if (toStage === 'qf' && i === 0) delta += Math.round(h * 0.35);
-        if (toStage === 'sf' && i === 0) delta += Math.round(h * 0.7);
+        if (toStage === 'qf' && i === 0) delta += Math.round(h * 0.55);
+        if (toStage === 'sf' && i === 0) delta += Math.round(h * 0.95);
       }
 
       node.dataset.translateY = String(delta);
