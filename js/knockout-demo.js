@@ -665,6 +665,11 @@ function setStageTranslateY(section, y) {
   section.style.transform = `translateY(${Math.round(y)}px)`;
 }
 
+function setMatchTranslateY(node, y) {
+  if (!node) return;
+  node.style.transform = `translateY(${Math.round(y)}px)`;
+}
+
 function getNodeCenterY(node, wrapRect) {
   const r = node.getBoundingClientRect();
   return r.top - wrapRect.top + (r.height / 2);
@@ -675,8 +680,14 @@ function alignBracketColumns() {
   const wrap = root ? root.querySelector('.ko-demo-wrap-mirror') : null;
   if (!wrap) return;
 
-  // Reset transforms before recalculating.
-  wrap.querySelectorAll('[data-stage-group], [data-center-stage]').forEach((el) => {
+  // Reset match-level transforms before recalculating.
+  wrap.querySelectorAll('.ko-match').forEach((el) => {
+    el.style.transform = 'translateY(0px)';
+    el.dataset.translateY = '0';
+  });
+
+  // Keep center containers static; only cards are translated deterministically.
+  wrap.querySelectorAll('[data-center-stage]').forEach((el) => {
     el.style.transform = 'translateY(0px)';
     el.dataset.translateY = '0';
   });
@@ -697,14 +708,20 @@ function alignSideStages(side, wrapRect) {
   for (const [fromStage, toStage] of transitions) {
     const fromNodes = getStageNodes(fromStage, side);
     const toNodes = getStageNodes(toStage, side);
-    const section = document.querySelector(`.ko-stage-${toStage}.ko-stage-${side}[data-stage-group="${toStage}"]`);
-    if (!section || fromNodes.length < 2 || toNodes.length === 0) continue;
+    if (fromNodes.length < 2 || toNodes.length === 0) continue;
 
-    const targetY = (getNodeCenterY(fromNodes[0], wrapRect) + getNodeCenterY(fromNodes[1], wrapRect)) / 2;
-    const currentY = getNodeCenterY(toNodes[0], wrapRect);
-    const delta = targetY - currentY;
-    section.dataset.translateY = String(delta);
-    setStageTranslateY(section, delta);
+    for (let i = 0; i < toNodes.length; i++) {
+      const a = fromNodes[i * 2];
+      const b = fromNodes[i * 2 + 1];
+      const node = toNodes[i];
+      if (!a || !b || !node) continue;
+
+      const targetY = (getNodeCenterY(a, wrapRect) + getNodeCenterY(b, wrapRect)) / 2;
+      const currentY = getNodeCenterY(node, wrapRect);
+      const delta = targetY - currentY;
+      node.dataset.translateY = String(delta);
+      setMatchTranslateY(node, delta);
+    }
   }
 }
 
@@ -714,25 +731,24 @@ function alignCenterStages(wrapRect) {
   const finalSection = document.querySelector('[data-center-stage="final"]');
   const bronzeSection = document.querySelector('[data-center-stage="third"]');
   const finalNode = getStageNodes('final', 'center')[0] || null;
+  const bronzeNode = getStageNodes('third', 'center')[0] || null;
 
   if (finalSection && finalNode && leftSf && rightSf) {
     const target = (getNodeCenterY(leftSf, wrapRect) + getNodeCenterY(rightSf, wrapRect)) / 2;
     const current = getNodeCenterY(finalNode, wrapRect);
     const delta = target - current;
-    finalSection.dataset.translateY = String(delta);
-    setStageTranslateY(finalSection, delta);
+    finalNode.dataset.translateY = String(delta);
+    setMatchTranslateY(finalNode, delta);
   }
 
-  if (bronzeSection) {
-    const finalRect = finalSection ? finalSection.getBoundingClientRect() : null;
-    const bronzeRect = bronzeSection.getBoundingClientRect();
-    if (finalRect) {
-      const targetTop = finalRect.bottom - wrapRect.top + 20;
-      const currentTop = bronzeRect.top - wrapRect.top;
-      const delta = targetTop - currentTop;
-      bronzeSection.dataset.translateY = String(delta);
-      setStageTranslateY(bronzeSection, delta);
-    }
+  if (bronzeSection && bronzeNode && finalNode) {
+    const finalRect = finalNode.getBoundingClientRect();
+    const bronzeRect = bronzeNode.getBoundingClientRect();
+    const targetTop = finalRect.bottom - wrapRect.top + 28;
+    const currentTop = bronzeRect.top - wrapRect.top;
+    const delta = targetTop - currentTop;
+    bronzeNode.dataset.translateY = String(delta);
+    setMatchTranslateY(bronzeNode, delta);
   }
 }
 
