@@ -1,5 +1,5 @@
 // ============================================================
-//  knockout-demo.js - Winner-only knockout bracket QA page
+//  knockout.js - Knockout bracket predictions
 // ============================================================
 
 let currentUser = null;
@@ -150,7 +150,7 @@ const ALL_EXPECTED_KNOCKOUT_IDS = Array.from({ length: 32 }, (_, i) => String(73
     updateDemoSummary();
   } catch (err) {
     console.error('Failed to load knockout demo:', err);
-    const root = document.getElementById('knockout-demo-root');
+    const root = document.getElementById('knockout-root');
     if (root) {
       root.innerHTML = '<div class="alert alert-danger">Failed to load knockout fixtures. Check Firestore access and data sync.</div>';
     }
@@ -223,7 +223,7 @@ function inferWinnerSideFromLegacyValue(matchId, winnerValue) {
 }
 
 function renderDemoBracket() {
-  const root = document.getElementById('knockout-demo-root');
+  const root = document.getElementById('knockout-root');
 
   if (knockoutMatches.length === 0) {
     root.innerHTML = '<div class="alert alert-secondary">No knockout matches found in Firestore.</div>';
@@ -747,7 +747,7 @@ function attachConnectorResizeHandler() {
   connectorResizeAttached = true;
   window.addEventListener('resize', scheduleBracketRelayout);
 
-  const root = document.getElementById('knockout-demo-root');
+  const root = document.getElementById('knockout-root');
   const wrap = root ? root.querySelector('.ko-demo-wrap-mirror') : null;
   if (!wrap) return;
 
@@ -785,7 +785,7 @@ function getNodeCenterY(node, wrapRect) {
 }
 
 function alignBracketColumns() {
-  const root = document.getElementById('knockout-demo-root');
+  const root = document.getElementById('knockout-root');
   const wrap = root ? root.querySelector('.ko-demo-wrap-mirror') : null;
   if (!wrap) return;
 
@@ -863,7 +863,7 @@ function alignCenterStages(wrapRect) {
 }
 
 function drawBracketConnectors() {
-  const root = document.getElementById('knockout-demo-root');
+  const root = document.getElementById('knockout-root');
   const wrap = root ? root.querySelector('.ko-demo-wrap-mirror') : null;
   const svg = wrap ? wrap.querySelector('.ko-connector-svg') : null;
   if (!wrap || !svg) return;
@@ -894,7 +894,7 @@ function drawBracketConnectors() {
 }
 
 function getStageNodes(stage, side) {
-  const root = document.getElementById('knockout-demo-root');
+  const root = document.getElementById('knockout-root');
   if (!root) return [];
   return Array.from(root.querySelectorAll(`.ko-match[data-stage="${stage}"][data-side="${side}"]`))
     .sort((a, b) => Number(a.dataset.index || 0) - Number(b.dataset.index || 0));
@@ -999,7 +999,7 @@ function updateDemoSummary() {
   }
 
   document.getElementById('summary-bar').innerHTML =
-    `<span>Demo knockout picks: <strong>${picked}/${total}</strong> selected</span>` +
+    `<span>Knockout picks: <strong>${picked}/${total}</strong> selected</span>` +
     `<span class="badge bg-white text-success fs-6">${totalPts} pts (${correct}/${finished} winners)</span>`;
 }
 
@@ -1050,7 +1050,7 @@ async function saveAllDemoKnockout() {
     const status = document.getElementById('save-status');
     status.textContent = 'All saved';
     status.className = 'text-success';
-    showToast('Demo knockout picks saved.');
+    showToast('Knockout picks saved.');
   } catch (err) {
     showToast(`Save failed: ${err.message}`, 'danger');
   } finally {
