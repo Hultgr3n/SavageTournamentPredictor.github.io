@@ -503,15 +503,13 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
     const predictedSide = getPredictedWinnerSideByMatchId(refId);
     if (predictedSide) {
       const refMatchForPrediction = matchById.get(refId);
-      const picked = refMatchForPrediction ? getSideDescriptor(refMatchForPrediction, predictedSide, visitedMatchIds).rawLabel : '';
-      const fromPrediction = picked ? [picked] : [];
-      if (refMatchForPrediction) {
-        const fallback = getWinnerOptionsForMatchRecursive(refMatchForPrediction, visitedMatchIds);
-        for (const team of fallback) {
-          if (!fromPrediction.includes(team)) fromPrediction.push(team);
-        }
-      }
-      return fromPrediction;
+      if (!refMatchForPrediction) return [];
+      // Only propagate the picked winner — do not fall back to all possibilities
+      const pickedDesc = getSideDescriptor(refMatchForPrediction, predictedSide, new Set(visitedMatchIds));
+      const pickedToken = pickedDesc.rawLabel;
+      if (!pickedToken) return [];
+      if (isConcreteTeamName(pickedToken)) return [pickedToken];
+      return resolvePossibleTeamsFromPlaceholder(pickedToken, new Set(visitedMatchIds));
     }
 
     const refMatch = matchById.get(refId);
