@@ -159,8 +159,8 @@ function buildSlotMap() {
 function inferWinnerSideFromLegacyValue(matchId, winnerValue) {
   const match = matchById.get(String(matchId));
   if (!match) return '';
-  const home = getSideDescriptor(match, 'home');
-  const away = getSideDescriptor(match, 'away');
+  const home = getSideDescriptor(match, 'home', new Set());
+  const away = getSideDescriptor(match, 'away', new Set());
   const value = String(winnerValue || '').trim();
   if (!value) return '';
   if (value === home.rawLabel || value === home.optionLabel) return 'home';
@@ -303,15 +303,15 @@ function resolveFlagForTeamName(teamName) {
 }
 
 function getWinnerOptionsForMatch(match) {
-  const home = getSideDescriptor(match, 'home');
-  const away = getSideDescriptor(match, 'away');
+  const home = getSideDescriptor(match, 'home', new Set());
+  const away = getSideDescriptor(match, 'away', new Set());
   return [
     { side: 'home', label: home.optionLabel },
     { side: 'away', label: away.optionLabel }
   ];
 }
 
-function getSideDescriptor(match, side) {
+function getSideDescriptor(match, side, visitedMatchIds = new Set()) {
   const isHome = side === 'home';
   const teamName = String(isHome ? (match.homeTeam || '') : (match.awayTeam || '')).trim();
   const teamFlag = String(isHome ? (match.homeFlag || '') : (match.awayFlag || '')).trim();
@@ -329,7 +329,7 @@ function getSideDescriptor(match, side) {
   const tokenFromData = normalizeSlotToken(teamName);
   const token = tokenFromSlot || tokenFromData || (isHome ? 'HOME' : 'AWAY');
 
-  const options = resolvePossibleTeamsFromPlaceholder(token, new Set()).filter(Boolean);
+  const options = resolvePossibleTeamsFromPlaceholder(token, visitedMatchIds).filter(Boolean);
   const resolved = options.length === 1 && isConcreteTeamName(options[0]) ? options[0] : '';
   const displayToken = normalizeSlotToken(token);
   let optionLabel = displayToken;
@@ -387,7 +387,7 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
     const predictedSide = getPredictedWinnerSideByMatchId(refId);
     if (predictedSide) {
       const refMatchForPrediction = matchById.get(refId);
-      const picked = refMatchForPrediction ? getSideDescriptor(refMatchForPrediction, predictedSide).rawLabel : '';
+      const picked = refMatchForPrediction ? getSideDescriptor(refMatchForPrediction, predictedSide, visitedMatchIds).rawLabel : '';
       const fromPrediction = picked ? [picked] : [];
       if (refMatchForPrediction) {
         const fallback = getWinnerOptionsForMatchRecursive(refMatchForPrediction, visitedMatchIds);
@@ -414,8 +414,8 @@ function getPredictedWinnerSideByMatchId(matchId) {
 }
 
 function getWinnerOptionsForMatchRecursive(match, visitedMatchIds) {
-  const home = getSideDescriptor(match, 'home').rawLabel;
-  const away = getSideDescriptor(match, 'away').rawLabel;
+  const home = getSideDescriptor(match, 'home', visitedMatchIds).rawLabel;
+  const away = getSideDescriptor(match, 'away', visitedMatchIds).rawLabel;
   const out = new Set();
   for (const token of [home, away]) {
     const nested = resolvePossibleTeamsFromPlaceholder(token, visitedMatchIds);
