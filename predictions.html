@@ -41,20 +41,12 @@
   <!-- Stage tabs -->
   <ul class="nav nav-tabs mb-3" id="stage-tabs">
     <li class="nav-item"><button class="nav-link active" onclick="showStage('group')">Group Stage</button></li>
-    <li class="nav-item"><button class="nav-link" onclick="showStage('knockout')">Knockout Stage</button></li>
+    <li class="nav-item"><a class="nav-link" href="knockout-demo.html">Knockout Stage</a></li>
   </ul>
-
-  <div class="mb-3">
-    <a id="knockout-demo-link" class="btn btn-outline-dark btn-sm d-none" href="knockout-demo.html">Open Knockout Demo (winner-only)</a>
-  </div>
 
   <!-- Match panels -->
   <div id="group-panel">
     <div id="group-matches" class="row g-3"></div>
-  </div>
-
-  <div id="knockout-panel" class="d-none">
-    <div id="knockout-matches" class="row g-3"></div>
   </div>
 
   <!-- No matches yet -->

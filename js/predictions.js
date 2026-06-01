@@ -145,9 +145,6 @@ const KNOCKOUT_TEMPLATE = {
 (async () => {
   currentUser = await requireAuth();
   buildNav(currentUser.username, currentUser.isAdmin);
-  if (currentUser.isAdmin) {
-    document.getElementById('knockout-demo-link')?.classList.remove('d-none');
-  }
 
   settings = await loadSettings();
   locked = isPredictionLocked(settings);
@@ -186,7 +183,6 @@ async function loadData() {
 // ── Rendering ─────────────────────────────────────────────
 function renderAll() {
   renderGroupStage();
-  renderKnockoutStage();
 }
 
 function renderGroupStage() {
@@ -603,8 +599,4 @@ function updateSummary() {
 // ── Stage toggle ──────────────────────────────────────────
 function showStage(stage) {
   document.getElementById('group-panel').classList.toggle('d-none', stage !== 'group');
-  document.getElementById('knockout-panel').classList.toggle('d-none', stage !== 'knockout');
-  document.querySelectorAll('#stage-tabs .nav-link').forEach((btn, i) => {
-    btn.classList.toggle('active', (i === 0 && stage === 'group') || (i === 1 && stage === 'knockout'));
-  });
 }

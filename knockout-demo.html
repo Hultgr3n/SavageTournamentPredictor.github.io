@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Knockout Demo - Savage Predictor 2026</title>
+  <title>Knockout Stage – Savage Predictor 2026</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
   <link rel="stylesheet" href="css/style.css"/>
 </head>
@@ -11,19 +11,14 @@
 <div id="app-nav"></div>
 
 <div class="container-fluid py-3 px-3">
-  <div class="alert alert-warning mb-3">
-    <strong>Demo mode:</strong> Winner-only knockout predictions for QA.
-    This page saves to a demo collection and does not modify live predictions.
-  </div>
-
   <div class="alert alert-info mb-3">
-    <strong>How this works:</strong> Pick the winner for every knockout match.
-    For future rounds, selectors include all teams that could reach that fixture based on bracket placeholders.
+    <strong>How points are awarded:</strong> Pick the winner for every knockout match.
+    1 point for each correctly predicted winner. 5 points for predicting the correct tournament winner (final).
     All knockout picks must be submitted before the knockout lock time.
   </div>
 
   <div id="lock-banner" class="alert alert-danger d-none">
-    Knockout predictions are locked. You can still view your demo picks.
+    🔒 Knockout predictions are locked. You can still view your picks.
   </div>
 
   <div class="row mb-3">
