@@ -24,6 +24,60 @@ const STAGE_LABEL = {
   final: 'Final'
 };
 
+const SLOT_BY_MATCH_ID = {
+  73: { home: '2A', away: '2B' },
+  74: { home: '1E', away: '3A/B/C/D/F' },
+  75: { home: '1F', away: '2C' },
+  76: { home: '1C', away: '2F' },
+  77: { home: '1I', away: '3C/D/F/G/H' },
+  78: { home: '2E', away: '2I' },
+  79: { home: '1A', away: '3C/E/F/H/I' },
+  80: { home: '1L', away: '3E/H/I/J/K' },
+  81: { home: '1D', away: '3B/E/F/I/J' },
+  82: { home: '1G', away: '3A/E/H/I/J' },
+  83: { home: '2K', away: '2L' },
+  84: { home: '1H', away: '2J' },
+  85: { home: '1B', away: '3E/F/G/I/J' },
+  86: { home: '1J', away: '2H' },
+  87: { home: '1K', away: '3D/E/I/J/L' },
+  88: { home: '2D', away: '2G' },
+  89: { home: 'W74', away: 'W77' },
+  90: { home: 'W73', away: 'W75' },
+  91: { home: 'W76', away: 'W78' },
+  92: { home: 'W79', away: 'W80' },
+  93: { home: 'W83', away: 'W84' },
+  94: { home: 'W81', away: 'W82' },
+  95: { home: 'W86', away: 'W88' },
+  96: { home: 'W85', away: 'W87' },
+  97: { home: 'W89', away: 'W90' },
+  98: { home: 'W93', away: 'W94' },
+  99: { home: 'W91', away: 'W92' },
+  100: { home: 'W95', away: 'W96' },
+  101: { home: 'W97', away: 'W98' },
+  102: { home: 'W99', away: 'W100' },
+  103: { home: 'L101', away: 'L102' },
+  104: { home: 'W101', away: 'W102' }
+};
+
+const BRACKET_MATCH_IDS = {
+  left: {
+    round32: [74, 77, 73, 75, 83, 84, 81, 82],
+    round16: [89, 90, 93, 94],
+    qf: [97, 98],
+    sf: [101]
+  },
+  right: {
+    round32: [86, 88, 85, 87, 76, 78, 79, 80],
+    round16: [95, 96, 91, 92],
+    qf: [99, 100],
+    sf: [102]
+  },
+  center: {
+    final: [104],
+    third: [103]
+  }
+};
+
 const SLOT_TEMPLATE = {
   round32: [
     { home: '2A', away: '2B' },
@@ -70,6 +124,8 @@ const SLOT_TEMPLATE = {
     { home: 'L101', away: 'L102' }
   ]
 };
+
+const ALL_EXPECTED_KNOCKOUT_IDS = Array.from({ length: 32 }, (_, i) => String(73 + i));
 
 (async () => {
   try {
@@ -141,21 +197,8 @@ async function loadDemoData() {
 
 function buildSlotMap() {
   slotByMatchId = new Map();
-  for (const stage of KNOCKOUT_ORDER) {
-    const stageMatches = knockoutMatches
-      .filter((m) => m.type === stage)
-      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
-    const template = SLOT_TEMPLATE[stage] || [];
-    for (let i = 0; i < stageMatches.length; i++) {
-      const m = stageMatches[i];
-      const t = template[i] || null;
-      if (t) slotByMatchId.set(String(m.id), t);
-    }
-  }
-
-  const third = knockoutMatches.filter((m) => isThirdPlaceMatch(m));
-  if (third.length > 0 && SLOT_TEMPLATE.third[0]) {
-    slotByMatchId.set(String(third[0].id), SLOT_TEMPLATE.third[0]);
+  for (const [id, slot] of Object.entries(SLOT_BY_MATCH_ID)) {
+    slotByMatchId.set(String(id), slot);
   }
 }
 
@@ -179,35 +222,16 @@ function renderDemoBracket() {
     return;
   }
 
-  const byStage = {};
-  for (const s of KNOCKOUT_ORDER) byStage[s] = [];
-  const thirdPlace = [];
-  for (const m of knockoutMatches) {
-    if (isThirdPlaceMatch(m)) {
-      thirdPlace.push(m);
-      continue;
-    }
-    if (byStage[m.type]) byStage[m.type].push(m);
-  }
-
-  for (const stage of KNOCKOUT_ORDER) {
-    byStage[stage].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
-  }
-
-  const left = {
-    round32: byStage.round32.slice(0, Math.ceil(byStage.round32.length / 2)),
-    round16: byStage.round16.slice(0, Math.ceil(byStage.round16.length / 2)),
-    qf: byStage.qf.slice(0, Math.ceil(byStage.qf.length / 2)),
-    sf: byStage.sf.slice(0, Math.ceil(byStage.sf.length / 2))
-  };
-  const right = {
-    round32: byStage.round32.slice(Math.ceil(byStage.round32.length / 2)).reverse(),
-    round16: byStage.round16.slice(Math.ceil(byStage.round16.length / 2)).reverse(),
-    qf: byStage.qf.slice(Math.ceil(byStage.qf.length / 2)).reverse(),
-    sf: byStage.sf.slice(Math.ceil(byStage.sf.length / 2)).reverse()
-  };
+  const left = buildSideFromIds(BRACKET_MATCH_IDS.left);
+  const right = buildSideFromIds(BRACKET_MATCH_IDS.right);
+  const finalMatches = BRACKET_MATCH_IDS.center.final.map((id) => matchById.get(String(id))).filter(Boolean);
+  const thirdPlace = BRACKET_MATCH_IDS.center.third.map((id) => matchById.get(String(id))).filter(Boolean);
+  const missing = getMissingExpectedKnockoutIds();
 
   let html = '';
+  if (missing.length > 0) {
+    html += `<div class="alert alert-warning mb-3">Missing knockout match IDs in Firestore: ${escHtml(missing.join(', '))}</div>`;
+  }
   html += '<div class="ko-demo-wrap ko-demo-wrap-mirror">';
   html += '<svg class="ko-connector-svg" aria-hidden="true"></svg>';
   html += '<div class="ko-bracket-layer">';
@@ -215,10 +239,10 @@ function renderDemoBracket() {
   html += renderSideStages(left, 'left');
   html += '</div>';
   html += '<div class="ko-center">';
-  if (byStage.final.length > 0) {
+  if (finalMatches.length > 0) {
     html += '<section class="ko-stage ko-stage-final-center" data-center-stage="final">';
     html += '<header class="ko-stage-title">Final</header>';
-    html += byStage.final.map((m, i) => renderMatchNode(m, { stage: 'final', side: 'center', index: i })).join('');
+    html += finalMatches.map((m, i) => renderMatchNode(m, { stage: 'final', side: 'center', index: i })).join('');
     html += '</section>';
   }
   if (thirdPlace.length > 0) {
@@ -240,6 +264,20 @@ function renderDemoBracket() {
   drawBracketConnectors();
   attachConnectorResizeHandler();
   scheduleBracketRelayout();
+}
+
+function buildSideFromIds(stageIds) {
+  return {
+    round32: stageIds.round32.map((id) => matchById.get(String(id))).filter(Boolean),
+    round16: stageIds.round16.map((id) => matchById.get(String(id))).filter(Boolean),
+    qf: stageIds.qf.map((id) => matchById.get(String(id))).filter(Boolean),
+    sf: stageIds.sf.map((id) => matchById.get(String(id))).filter(Boolean)
+  };
+}
+
+function getMissingExpectedKnockoutIds() {
+  const present = new Set(knockoutMatches.map((m) => String(m.id)));
+  return ALL_EXPECTED_KNOCKOUT_IDS.filter((id) => !present.has(id));
 }
 
 function renderSideStages(sideMap, sideName) {
