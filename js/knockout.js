@@ -67,8 +67,8 @@ const BRACKET_MATCH_IDS = {
     sf: [101]
   },
   right: {
-    round32: [79, 80, 76, 78, 85, 87, 86, 88],
-    round16: [92, 91, 96, 95],
+    round32: [76, 78, 79, 80, 86, 88, 85, 87],
+    round16: [91, 92, 95, 96],
     qf: [99, 100],
     sf: [102]
   },
@@ -440,7 +440,17 @@ function getSideDescriptor(match, side, visitedMatchIds = new Set()) {
   const teamName = String(isHome ? (match.homeTeam || '') : (match.awayTeam || '')).trim();
   const teamFlag = String(isHome ? (match.homeFlag || '') : (match.awayFlag || '')).trim();
 
-  if (isConcreteTeamName(teamName)) {
+  const slot = slotByMatchId.get(String(match.id));
+  const matchType = String(match.type || '').toLowerCase();
+
+  // For unfinished round16+ matches with a known slot, always resolve via the slot.
+  // The API can populate homeTeam/awayTeam on these matches with incorrect data as
+  // results trickle in, so we must derive the teams from the bracket structure instead.
+  // Round32 and group matches are exempt — their Firestore team names come directly
+  // from group-stage results and are reliable.
+  const useSlotResolution = slot && !match.finished && matchType !== 'round32';
+
+  if (!useSlotResolution && isConcreteTeamName(teamName)) {
     return {
       rawLabel: teamName,
       optionLabel: teamName,
@@ -448,7 +458,6 @@ function getSideDescriptor(match, side, visitedMatchIds = new Set()) {
     };
   }
 
-  const slot = slotByMatchId.get(String(match.id));
   const tokenFromSlot = slot ? String(isHome ? slot.home : slot.away) : '';
   const tokenFromData = normalizeSlotToken(teamName);
   const token = tokenFromSlot || tokenFromData || (isHome ? 'HOME' : 'AWAY');
