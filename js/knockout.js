@@ -443,12 +443,13 @@ function getSideDescriptor(match, side, visitedMatchIds = new Set()) {
   const slot = slotByMatchId.get(String(match.id));
   const matchType = String(match.type || '').toLowerCase();
 
-  // For unfinished round16+ matches with a known slot, always resolve via the slot.
-  // The API can populate homeTeam/awayTeam on these matches with incorrect data as
-  // results trickle in, so we must derive the teams from the bracket structure instead.
-  // Round32 and group matches are exempt — their Firestore team names come directly
-  // from group-stage results and are reliable.
-  const useSlotResolution = slot && !match.finished && matchType !== 'round32';
+  // For round16+ matches, always resolve via the slot unless the match has actual
+  // score data (meaning it was genuinely played). We use score presence rather than
+  // the 'finished' flag because the API can set finished=true on future fixtures
+  // before they are played, while homeTeam/awayTeam may carry stale or wrong data.
+  // Round32 and group matches are exempt — their team names come from group results.
+  const hasScore = Number.isFinite(Number(match.actualHome)) && Number.isFinite(Number(match.actualAway));
+  const useSlotResolution = slot && !hasScore && matchType !== 'round32';
 
   if (!useSlotResolution && isConcreteTeamName(teamName)) {
     return {
@@ -532,9 +533,13 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
     const refMatch = matchById.get(refId);
     if (!refMatch) return [];
 
-    // If the referenced match has a confirmed result, propagate the actual winner
-    if (refMatch.finished) {
-      const winnerSide = getActualWinnerSide(refMatch);
+    // If the referenced match has actual scores it was genuinely played — propagate the winner.
+    // We use score presence rather than the 'finished' flag because the API can set
+    // finished=true on unplayed fixtures with no scores yet.
+    const hg = Number(refMatch.actualHome);
+    const ag = Number(refMatch.actualAway);
+    if (Number.isFinite(hg) && Number.isFinite(ag)) {
+      const winnerSide = hg > ag ? 'home' : (ag > hg ? 'away' : '');
       if (winnerSide) {
         const winnerDesc = getSideDescriptor(refMatch, winnerSide, new Set(visitedMatchIds));
         const winnerToken = winnerDesc.rawLabel;
@@ -543,7 +548,7 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
       }
     }
 
-    // No prediction and match not yet finished: return empty so the WXX placeholder is shown
+    // No prediction and no actual scores yet: return empty so the WXX placeholder is shown
     return [];
   }
 
