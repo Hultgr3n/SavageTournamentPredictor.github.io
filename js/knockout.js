@@ -704,13 +704,17 @@ function getTeamsFromGroups(groupLetters) {
 }
 
 function getActualWinnerName(m) {
-  if (!m || !m.finished) return '';
+  if (!m) return '';
 
-  const explicitWinner = String(
-    m.winnerTeam || m.winner_team_name || m.winner || m.winnerName || ''
-  ).trim();
-  if (explicitWinner) return explicitWinner;
+  // Trust explicit winner fields only when the API confirms the match is finished
+  if (m.finished) {
+    const explicitWinner = String(
+      m.winnerTeam || m.winner_team_name || m.winner || m.winnerName || ''
+    ).trim();
+    if (explicitWinner) return explicitWinner;
+  }
 
+  // Score-based detection works regardless of the finished flag
   const home = Number(m.actualHome);
   const away = Number(m.actualAway);
   if (Number.isFinite(home) && Number.isFinite(away)) {
@@ -722,19 +726,23 @@ function getActualWinnerName(m) {
 }
 
 function getActualWinnerSide(m) {
-  if (!m || !m.finished) return '';
+  if (!m) return '';
 
-  const winnerName = getActualWinnerName(m);
-  if (winnerName) {
-    if (winnerName === String(m.homeTeam || '').trim()) return 'home';
-    if (winnerName === String(m.awayTeam || '').trim()) return 'away';
-  }
-
+  // Derive side from scores directly — reliable regardless of the finished flag
   const home = Number(m.actualHome);
   const away = Number(m.actualAway);
   if (Number.isFinite(home) && Number.isFinite(away)) {
     if (home > away) return 'home';
     if (away > home) return 'away';
+  }
+
+  // Fallback: use explicit winner name for finished matches (e.g. extra-time/penalties)
+  if (m.finished) {
+    const winnerName = getActualWinnerName(m);
+    if (winnerName) {
+      if (winnerName === String(m.homeTeam || '').trim()) return 'home';
+      if (winnerName === String(m.awayTeam || '').trim()) return 'away';
+    }
   }
   return '';
 }
@@ -1009,12 +1017,14 @@ function updateDemoSummary() {
     return pred.winnerSide === 'home' || pred.winnerSide === 'away';
   }).length;
 
-  const finished = knockoutMatches.filter((m) => !!m.finished).length;
+  // Use score presence as the "match played" signal — the finished flag is unreliable
+  const hasScore = (m) => Number.isFinite(Number(m.actualHome)) && Number.isFinite(Number(m.actualAway));
+  const finished = knockoutMatches.filter(hasScore).length;
   let correct = 0;
   let totalPts = 0;
 
   for (const m of knockoutMatches) {
-    if (!m.finished) continue;
+    if (!hasScore(m)) continue;
     const actualSide = getActualWinnerSide(m);
     const predSide = (demoPreds[m.id] || {}).winnerSide || '';
     if (actualSide && predSide && actualSide === predSide) {
