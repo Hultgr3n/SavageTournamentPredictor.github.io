@@ -532,8 +532,19 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
     const refMatch = matchById.get(refId);
     if (!refMatch) return [];
 
-    const options = getWinnerOptionsForMatchRecursive(refMatch, visitedMatchIds);
-    return options;
+    // If the referenced match has a confirmed result, propagate the actual winner
+    if (refMatch.finished) {
+      const winnerSide = getActualWinnerSide(refMatch);
+      if (winnerSide) {
+        const winnerDesc = getSideDescriptor(refMatch, winnerSide, new Set(visitedMatchIds));
+        const winnerToken = winnerDesc.rawLabel;
+        if (isConcreteTeamName(winnerToken)) return [winnerToken];
+        return resolvePossibleTeamsFromPlaceholder(winnerToken, new Set(visitedMatchIds));
+      }
+    }
+
+    // No prediction and match not yet finished: return empty so the WXX placeholder is shown
+    return [];
   }
 
   return [];
