@@ -444,8 +444,14 @@ function getSideDescriptor(match, side, visitedMatchIds = new Set()) {
   //   (a) finished=true with null scores (fixture confirmed but not played)
   //   (b) finished=false with default 0/0 scores (pre-filled unplayed match)
   // Round32 and group matches are exempt — their team names come from group results.
-  // Also guard against Number(null)===0 which makes isFinite(0) pass on null scores.
-  const isPlayed = match.finished
+  // A match is genuinely played only when:
+  //   1. kickoff has already passed (future matches cannot have results)
+  //   2. finished=true
+  //   3. scores are non-null and finite (guards null→0 and explicit 0 API pre-fills)
+  const kickoffMs = match.kickoffUtc ? new Date(match.kickoffUtc).getTime() : 0;
+  const kickoffPassed = !kickoffMs || kickoffMs < Date.now();
+  const isPlayed = kickoffPassed
+    && match.finished
     && match.actualHome != null && match.actualAway != null
     && Number.isFinite(Number(match.actualHome)) && Number.isFinite(Number(match.actualAway));
   const useSlotResolution = slot && !isPlayed && matchType !== 'round32';
@@ -532,9 +538,10 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
     const refMatch = matchById.get(refId);
     if (!refMatch) return [];
 
-    // A match is genuinely played when finished=true AND numeric scores exist.
-    // This guards against finished=true+null scores AND finished=false+default 0/0 scores.
-    const refIsPlayed = refMatch.finished
+    const refKickoffMs = refMatch.kickoffUtc ? new Date(refMatch.kickoffUtc).getTime() : 0;
+    const refKickoffPassed = !refKickoffMs || refKickoffMs < Date.now();
+    const refIsPlayed = refKickoffPassed
+      && refMatch.finished
       && refMatch.actualHome != null && refMatch.actualAway != null
       && Number.isFinite(Number(refMatch.actualHome)) && Number.isFinite(Number(refMatch.actualAway));
     if (refIsPlayed) {
@@ -1016,10 +1023,13 @@ function updateDemoSummary() {
     return pred.winnerSide === 'home' || pred.winnerSide === 'away';
   }).length;
 
-  // A match counts for scoring when finished=true AND numeric scores exist
-  const isPlayed = (m) => m.finished
-    && m.actualHome != null && m.actualAway != null
-    && Number.isFinite(Number(m.actualHome)) && Number.isFinite(Number(m.actualAway));
+  const isPlayed = (m) => {
+    const kMs = m.kickoffUtc ? new Date(m.kickoffUtc).getTime() : 0;
+    return (!kMs || kMs < Date.now())
+      && m.finished
+      && m.actualHome != null && m.actualAway != null
+      && Number.isFinite(Number(m.actualHome)) && Number.isFinite(Number(m.actualAway));
+  };
   const finished = knockoutMatches.filter(isPlayed).length;
   let correct = 0;
   let totalPts = 0;
