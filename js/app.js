@@ -198,37 +198,20 @@ function fmtDate(ts) {
 /** Format a date/time string to European format (DD/MM/YYYY HH:mm). */
 function formatDateToEuropean(dateStr) {
   if (!dateStr) return '';
-
-  const raw = String(dateStr).trim();
-
-  // ISO-like: YYYY-MM-DD[ HH:mm]
-  const isoLike = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
-  if (isoLike) {
-    const [, year, month, day, hour = '00', minute = '00'] = isoLike;
-    return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`.trim();
-  }
-
-  // Slash or dash date: MM/DD/YYYY or DD/MM/YYYY (with optional HH:mm)
-  const slashLike = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
-  if (slashLike) {
-    const [, part1, part2, year, hour = '00', minute = '00'] = slashLike;
-    const p1 = Number(part1);
-    const p2 = Number(part2);
-
-    // Prefer converting from US input (MM/DD/YYYY). If clearly already EU (DD/MM), preserve it.
-    const month = p1 > 12 ? p2 : p1;
-    const day = p1 > 12 ? p1 : p2;
-
-    return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`.trim();
-  }
-
-  const parsed = new Date(raw);
-  if (isNaN(parsed.getTime())) return raw;
-
-  const day = String(parsed.getDate()).padStart(2, '0');
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const year = parsed.getFullYear();
-  const hour = String(parsed.getHours()).padStart(2, '0');
-  const minute = String(parsed.getMinutes()).padStart(2, '0');
-  return `${day}/${month}/${year} ${hour}:${minute}`;
+  const parsed = new Date(String(dateStr).trim());
+  if (isNaN(parsed.getTime())) return String(dateStr);
+  // Display in Central European (Summer) Time — UTC+2 in summer, UTC+1 in winter.
+  // Intl.DateTimeFormat handles DST automatically.
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Stockholm',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).formatToParts(parsed);
+  const p = {};
+  for (const { type, value } of parts) p[type] = value;
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
 }

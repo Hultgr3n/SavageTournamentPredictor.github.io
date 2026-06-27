@@ -466,7 +466,7 @@ function buildMatchDoc(g, teams, typeMap) {
     stadium: g.stadium || '',
     actualHome: toMaybeNumber(g.home_score),
     actualAway: toMaybeNumber(g.away_score),
-    finished: toMatchFinished(g),
+    finished: toMatchFinished(g) && toMaybeNumber(g.home_score) !== null && toMaybeNumber(g.away_score) !== null,
     sortOrder: Number(matchId) || Number(g.match_number) || 0
   };
 }
