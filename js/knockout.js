@@ -1,7 +1,7 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
-const KO_VERSION = '20260627e';
+const KO_VERSION = '20260627f';
 console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
@@ -438,26 +438,17 @@ function getSideDescriptor(match, side, visitedMatchIds = new Set()) {
   const teamFlag = String(isHome ? (match.homeFlag || '') : (match.awayFlag || '')).trim();
 
   const slot = slotByMatchId.get(String(match.id));
-  const matchType = String(match.type || '').toLowerCase();
 
-  // For round16+ matches, always resolve via the slot unless the match was genuinely
-  // played. A match is genuinely played when BOTH finished=true AND numeric scores exist.
-  // This guards against two API quirks:
-  //   (a) finished=true with null scores (fixture confirmed but not played)
-  //   (b) finished=false with default 0/0 scores (pre-filled unplayed match)
-  // Round32 and group matches are exempt — their team names come from group results.
-  // A match is genuinely played only when:
-  //   1. kickoff has already passed (future matches cannot have results)
-  //   2. finished=true
-  //   3. scores are non-null and finite (guards null→0 and explicit 0 API pre-fills)
-  // kickoffMs > 0 guards: missing date (0) or invalid date (NaN) → NOT passed
-  const kickoffMs = match.kickoffUtc ? new Date(match.kickoffUtc).getTime() : 0;
-  const kickoffPassed = kickoffMs > 0 && !isNaN(kickoffMs) && kickoffMs < Date.now();
-  const isPlayed = kickoffPassed
-    && match.finished
-    && match.actualHome != null && match.actualAway != null
-    && Number.isFinite(Number(match.actualHome)) && Number.isFinite(Number(match.actualAway));
-  const useSlotResolution = slot && !isPlayed && matchType !== 'round32';
+  // Determine slot-resolution mode purely from the SLOT TOKEN itself.
+  // W/L tokens (e.g., W74, L89) belong to R16+ matches and must always be resolved
+  // through the prediction/result chain — never from Firestore homeTeam/awayTeam,
+  // because the API pre-populates those fields with wrong data for all future matches.
+  // Group qualifier tokens (e.g., 1K, 3D/E/F) belong to R32 entries and should use
+  // Firestore's homeTeam/awayTeam directly (pre-filled from live group standings).
+  // This approach is immune to corrupted `type`, `finished`, `kickoffUtc`, and score
+  // fields that the API sets incorrectly on future knockout fixtures.
+  const slotToken = slot ? normalizeSlotToken(isHome ? slot.home : slot.away) : '';
+  const useSlotResolution = /^[WwLl]\d+$/.test(slotToken);
 
   if (!useSlotResolution && isConcreteTeamName(teamName)) {
     return {
