@@ -1,7 +1,7 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
-const KO_VERSION = '20260627f';
+const KO_VERSION = '20260627g';
 console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
@@ -517,12 +517,17 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
     if (visitedMatchIds.has(refId)) return [];
     visitedMatchIds.add(refId);
 
+    // L-tokens (bronze match) resolve to the LOSER — the opposite side of the winner.
+    const isLoserToken = /^L\d+$/i.test(token.trim());
+    const flipSide = (s) => s === 'home' ? 'away' : 'home';
+
     const predictedSide = getPredictedWinnerSideByMatchId(refId);
     if (predictedSide) {
       const refMatchForPrediction = matchById.get(refId);
       if (!refMatchForPrediction) return [];
-      // Only propagate the picked winner — do not fall back to all possibilities
-      const pickedDesc = getSideDescriptor(refMatchForPrediction, predictedSide, new Set(visitedMatchIds));
+      // For L-tokens take the opposite of the predicted winner (i.e. the loser)
+      const relevantSide = isLoserToken ? flipSide(predictedSide) : predictedSide;
+      const pickedDesc = getSideDescriptor(refMatchForPrediction, relevantSide, new Set(visitedMatchIds));
       const pickedToken = pickedDesc.rawLabel;
       if (!pickedToken) return [];
       if (isConcreteTeamName(pickedToken)) return [pickedToken];
@@ -541,7 +546,8 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
     if (refIsPlayed) {
       const winnerSide = getActualWinnerSide(refMatch);
       if (winnerSide) {
-        const winnerDesc = getSideDescriptor(refMatch, winnerSide, new Set(visitedMatchIds));
+        const relevantSide = isLoserToken ? flipSide(winnerSide) : winnerSide;
+        const winnerDesc = getSideDescriptor(refMatch, relevantSide, new Set(visitedMatchIds));
         const winnerToken = winnerDesc.rawLabel;
         if (isConcreteTeamName(winnerToken)) return [winnerToken];
         return resolvePossibleTeamsFromPlaceholder(winnerToken, new Set(visitedMatchIds));
