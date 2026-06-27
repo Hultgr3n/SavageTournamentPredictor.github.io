@@ -132,11 +132,6 @@ const ALL_EXPECTED_KNOCKOUT_IDS = Array.from({ length: 32 }, (_, i) => String(73
     currentUser = await requireAuth();
     buildNav(currentUser.username, currentUser.isAdmin);
 
-    if (!currentUser.isAdmin) {
-      window.location.href = 'predictions.html';
-      return;
-    }
-
     settings = await loadSettings();
     knockoutLocked = isPredictionLocked(settings, 'knockout');
     if (knockoutLocked) {
@@ -443,13 +438,16 @@ function getSideDescriptor(match, side, visitedMatchIds = new Set()) {
   const slot = slotByMatchId.get(String(match.id));
   const matchType = String(match.type || '').toLowerCase();
 
-  // For round16+ matches, always resolve via the slot unless the match has actual
-  // score data (meaning it was genuinely played). We use score presence rather than
-  // the 'finished' flag because the API can set finished=true on future fixtures
-  // before they are played, while homeTeam/awayTeam may carry stale or wrong data.
+  // For round16+ matches, always resolve via the slot unless the match was genuinely
+  // played. A match is genuinely played when BOTH finished=true AND numeric scores exist.
+  // This guards against two API quirks:
+  //   (a) finished=true with null scores (fixture confirmed but not played)
+  //   (b) finished=false with default 0/0 scores (pre-filled unplayed match)
   // Round32 and group matches are exempt — their team names come from group results.
-  const hasScore = Number.isFinite(Number(match.actualHome)) && Number.isFinite(Number(match.actualAway));
-  const useSlotResolution = slot && !hasScore && matchType !== 'round32';
+  const homeScore = Number(match.actualHome);
+  const awayScore = Number(match.actualAway);
+  const isPlayed = match.finished && Number.isFinite(homeScore) && Number.isFinite(awayScore);
+  const useSlotResolution = slot && !isPlayed && matchType !== 'round32';
 
   if (!useSlotResolution && isConcreteTeamName(teamName)) {
     return {
@@ -533,13 +531,13 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
     const refMatch = matchById.get(refId);
     if (!refMatch) return [];
 
-    // If the referenced match has actual scores it was genuinely played — propagate the winner.
-    // We use score presence rather than the 'finished' flag because the API can set
-    // finished=true on unplayed fixtures with no scores yet.
-    const hg = Number(refMatch.actualHome);
-    const ag = Number(refMatch.actualAway);
-    if (Number.isFinite(hg) && Number.isFinite(ag)) {
-      const winnerSide = hg > ag ? 'home' : (ag > hg ? 'away' : '');
+    // A match is genuinely played when finished=true AND numeric scores exist.
+    // This guards against finished=true+null scores AND finished=false+default 0/0 scores.
+    const refHg = Number(refMatch.actualHome);
+    const refAg = Number(refMatch.actualAway);
+    const refIsPlayed = refMatch.finished && Number.isFinite(refHg) && Number.isFinite(refAg);
+    if (refIsPlayed) {
+      const winnerSide = getActualWinnerSide(refMatch);
       if (winnerSide) {
         const winnerDesc = getSideDescriptor(refMatch, winnerSide, new Set(visitedMatchIds));
         const winnerToken = winnerDesc.rawLabel;
@@ -548,7 +546,7 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
       }
     }
 
-    // No prediction and no actual scores yet: return empty so the WXX placeholder is shown
+    // No prediction and not yet played: return empty so the WXX placeholder is shown
     return [];
   }
 
@@ -1017,14 +1015,14 @@ function updateDemoSummary() {
     return pred.winnerSide === 'home' || pred.winnerSide === 'away';
   }).length;
 
-  // Use score presence as the "match played" signal — the finished flag is unreliable
-  const hasScore = (m) => Number.isFinite(Number(m.actualHome)) && Number.isFinite(Number(m.actualAway));
-  const finished = knockoutMatches.filter(hasScore).length;
+  // A match counts for scoring when finished=true AND numeric scores exist
+  const isPlayed = (m) => m.finished && Number.isFinite(Number(m.actualHome)) && Number.isFinite(Number(m.actualAway));
+  const finished = knockoutMatches.filter(isPlayed).length;
   let correct = 0;
   let totalPts = 0;
 
   for (const m of knockoutMatches) {
-    if (!hasScore(m)) continue;
+    if (!isPlayed(m)) continue;
     const actualSide = getActualWinnerSide(m);
     const predSide = (demoPreds[m.id] || {}).winnerSide || '';
     if (actualSide && predSide && actualSide === predSide) {
