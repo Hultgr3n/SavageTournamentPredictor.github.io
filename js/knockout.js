@@ -1,6 +1,8 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
+const KO_VERSION = '20260627e';
+console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
 let settings = {};
@@ -448,8 +450,9 @@ function getSideDescriptor(match, side, visitedMatchIds = new Set()) {
   //   1. kickoff has already passed (future matches cannot have results)
   //   2. finished=true
   //   3. scores are non-null and finite (guards null→0 and explicit 0 API pre-fills)
+  // kickoffMs > 0 guards: missing date (0) or invalid date (NaN) → NOT passed
   const kickoffMs = match.kickoffUtc ? new Date(match.kickoffUtc).getTime() : 0;
-  const kickoffPassed = !kickoffMs || kickoffMs < Date.now();
+  const kickoffPassed = kickoffMs > 0 && !isNaN(kickoffMs) && kickoffMs < Date.now();
   const isPlayed = kickoffPassed
     && match.finished
     && match.actualHome != null && match.actualAway != null
@@ -539,7 +542,7 @@ function resolvePossibleTeamsFromPlaceholder(rawToken, visitedMatchIds) {
     if (!refMatch) return [];
 
     const refKickoffMs = refMatch.kickoffUtc ? new Date(refMatch.kickoffUtc).getTime() : 0;
-    const refKickoffPassed = !refKickoffMs || refKickoffMs < Date.now();
+    const refKickoffPassed = refKickoffMs > 0 && !isNaN(refKickoffMs) && refKickoffMs < Date.now();
     const refIsPlayed = refKickoffPassed
       && refMatch.finished
       && refMatch.actualHome != null && refMatch.actualAway != null
@@ -1025,7 +1028,7 @@ function updateDemoSummary() {
 
   const isPlayed = (m) => {
     const kMs = m.kickoffUtc ? new Date(m.kickoffUtc).getTime() : 0;
-    return (!kMs || kMs < Date.now())
+    return (kMs > 0 && !isNaN(kMs) && kMs < Date.now())
       && m.finished
       && m.actualHome != null && m.actualAway != null
       && Number.isFinite(Number(m.actualHome)) && Number.isFinite(Number(m.actualAway));
