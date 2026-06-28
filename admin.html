@@ -74,14 +74,16 @@
     </div>
   </div>
 
-  <!-- ── 3. Reset Corrupted Fixture ──────────────────── -->
+  <!-- ── 3. Reset Corrupted Fixture + Diagnose ──────────────────── -->
   <div class="card mb-4 border-danger">
-    <div class="card-header bg-danger text-white fw-bold">🔧 Reset Corrupted Fixture</div>
+    <div class="card-header bg-danger text-white fw-bold">🔧 Reset Corrupted Fixture &amp; Diagnostics</div>
     <div class="card-body">
-      <p class="text-muted small">If a sync overwrote a knockout match with wrong team data, use this to wipe that match back to a clean slate.
-        Team names will resolve automatically from group standings. Scores can be re-entered manually or via <em>Sync Scores Only</em> once the match is played.
-        User predictions are <strong>not</strong> affected.</p>
-      <div class="row g-2 align-items-end">
+      <p class="text-muted small mb-3">The API uses different internal IDs than FIFA's official match numbers, so <em>Sync Scores Only</em>
+        now matches by kick-off time to route scores to the correct bracket doc. Use <strong>Diagnose</strong>
+        to see exactly which Firestore doc IDs exist for knockout matches — cross-reference with expected bracket
+        positions to spot mismatches. <strong>Reset Fixture</strong> wipes a single corrupted doc; user predictions are never touched.</p>
+
+      <div class="row g-2 align-items-end mb-3">
         <div class="col-md-4">
           <label class="form-label">Match ID to reset</label>
           <input type="text" id="reset-match-id" class="form-control" placeholder="e.g. 82"/>
@@ -90,7 +92,14 @@
           <button class="btn btn-danger w-100" onclick="resetFixture()">Reset Fixture</button>
         </div>
       </div>
-      <div id="reset-status" class="small text-muted mt-2"></div>
+      <div id="reset-status" class="small text-muted mb-3"></div>
+
+      <hr class="my-2"/>
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <button class="btn btn-outline-secondary btn-sm" onclick="diagnoseKnockoutIds()">🔍 Diagnose Knockout IDs</button>
+        <span class="text-muted small">Lists every non-group Firestore doc: ID | type | kickoff | teams | score</span>
+      </div>
+      <pre id="diagnose-output" class="small bg-dark text-light p-2 rounded" style="max-height:300px;overflow-y:auto;white-space:pre;font-size:0.75rem;"></pre>
     </div>
   </div>
 

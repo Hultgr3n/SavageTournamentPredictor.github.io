@@ -165,6 +165,10 @@ async function syncScoresFromApi() {
 }
 
 // ── Sync scores only (never rewrites fixture structure) ──
+// Matches API results to Firestore docs by kickoff time (minute precision),
+// preferring the lower Firestore doc ID when duplicates share a kickoff.
+// This routes scores to the original bracket-position docs even when the
+// API uses different IDs for the confirmed fixtures.
 async function syncScoresOnlyFromApi() {
   const token = document.getElementById('api-token-input').value.trim();
   if (!token) { showToast('Save an API key first.', 'warning'); return; }
@@ -176,19 +180,43 @@ async function syncScoresOnlyFromApi() {
   const gameList = extractList(gamesData, ['games', 'data', 'matches', 'results', 'items']);
   if (gameList.length === 0) { setApiStatus('❌ No games returned from API.'); return; }
 
+  // Build kickoff-minute → Firestore doc ID map.
+  // When the API created a duplicate confirmed doc (e.g. id=82 for what we call M73),
+  // both docs share the same kickoffUtc. We prefer the LOWER numeric doc ID because
+  // that is the original bracket-position placeholder that BRACKET_MATCH_IDS refers to.
+  const toKickoffMin = (s) => {
+    const t = new Date(String(s || '')).getTime();
+    return (Number.isFinite(t) && t > 0) ? String(Math.floor(t / 60000)) : '';
+  };
+
+  const matchesSnap = await db.collection('matches').get();
+  const kickoffMinToDocId = new Map();
+  const docsSorted = matchesSnap.docs.slice().sort((a, b) => {
+    const na = Number(a.id), nb = Number(b.id);
+    return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.id.localeCompare(b.id);
+  });
+  docsSorted.forEach(doc => {
+    const k = toKickoffMin(doc.data().kickoffUtc);
+    if (k && !kickoffMinToDocId.has(k)) kickoffMinToDocId.set(k, doc.id);
+  });
+
   let updated = 0;
   const CHUNK = 400;
   for (let i = 0; i < gameList.length; i += CHUNK) {
     const batch = db.batch();
     for (const g of gameList.slice(i, i + CHUNK)) {
-      const matchId = String(g.id ?? g.match_number ?? g.matchId ?? g.match_id ?? '');
-      if (!matchId) continue;
-      const docRef = db.collection('matches').doc(matchId);
+      const apiKickoff = g.kickoff_utc || g.kickoffUtc || g.local_date || g.date || '';
+      const kickoffMin = toKickoffMin(apiKickoff);
+      const apiId = String(g.id ?? g.match_number ?? g.matchId ?? g.match_id ?? '');
+      // Prefer kickoff-based lookup; fall back to API ID if no match found
+      const docId = (kickoffMin && kickoffMinToDocId.has(kickoffMin))
+        ? kickoffMinToDocId.get(kickoffMin)
+        : apiId;
+      if (!docId) continue;
       const isFinished = toMatchFinished(g)
         && toMaybeNumber(g.home_score) !== null
         && toMaybeNumber(g.away_score) !== null;
-      // ONLY write score fields — never homeTeam, awayTeam, type, group, kickoffUtc, etc.
-      batch.set(docRef, {
+      batch.set(db.collection('matches').doc(docId), {
         actualHome: toMaybeNumber(g.home_score),
         actualAway: toMaybeNumber(g.away_score),
         finished: isFinished
@@ -201,6 +229,30 @@ async function syncScoresOnlyFromApi() {
     { lastSync: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
   setApiStatus(`✅ Scores synced for ${updated} matches. Fixture structure unchanged.`);
   showToast('Scores synced!');
+}
+
+// ── Diagnose knockout match IDs ──────────────────────────
+// Shows every non-group Firestore doc so you can see the actual doc IDs
+// the API assigned and cross-reference with the expected bracket positions.
+async function diagnoseKnockoutIds() {
+  const statusEl = document.getElementById('diagnose-output');
+  statusEl.textContent = '⏳ Loading…';
+  const snap = await db.collection('matches').get();
+  const rows = [];
+  snap.forEach(doc => {
+    const d = doc.data();
+    if (d.type && d.type !== 'group') {
+      rows.push({ id: doc.id, type: d.type || '?', kickoffUtc: d.kickoffUtc || '',
+        home: d.homeTeam || '', away: d.awayTeam || '',
+        finished: d.finished || false, aH: d.actualHome, aA: d.actualAway });
+    }
+  });
+  rows.sort((a, b) => { const na = Number(a.id), nb = Number(b.id);
+    return (!isNaN(na) && !isNaN(nb)) ? na - nb : a.id.localeCompare(b.id); });
+  if (rows.length === 0) { statusEl.textContent = 'No knockout matches found.'; return; }
+  statusEl.textContent = rows.map(r =>
+    `ID:${r.id.padEnd(4)} | ${r.type.padEnd(8)} | ${(r.kickoffUtc||'').slice(0,16).padEnd(16)} | ${(r.home||'TBD').padEnd(22)} vs ${(r.away||'TBD')}${r.finished ? ` [✓ ${r.aH}-${r.aA}]` : ''}`
+  ).join('\n');
 }
 
 // ── Reset a corrupted match fixture ────────────────────────

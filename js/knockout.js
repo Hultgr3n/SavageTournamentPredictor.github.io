@@ -1,7 +1,7 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
-const KO_VERSION = '20260628b';
+const KO_VERSION = '20260629a';
 console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
@@ -731,8 +731,15 @@ function getActualWinnerName(m) {
   const home = Number(m.actualHome);
   const away = Number(m.actualAway);
   if (Number.isFinite(home) && Number.isFinite(away)) {
-    if (home > away) return String(m.homeTeam || '').trim();
-    if (away > home) return String(m.awayTeam || '').trim();
+    if (home > away) {
+      const name = String(m.homeTeam || '').trim();
+      // Fallback to group-snapshot resolution when homeTeam was cleared
+      return name || getSideDescriptor(m, 'home', new Set()).rawLabel || '';
+    }
+    if (away > home) {
+      const name = String(m.awayTeam || '').trim();
+      return name || getSideDescriptor(m, 'away', new Set()).rawLabel || '';
+    }
   }
 
   return '';
