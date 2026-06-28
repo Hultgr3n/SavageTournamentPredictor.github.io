@@ -65,13 +65,36 @@
       <div class="d-flex gap-2 flex-wrap">
         <button class="btn btn-outline-secondary" onclick="saveApiToken()">💾 Save API Key</button>
         <button class="btn btn-outline-success" onclick="initMatchesFromApi()">📥 Initialize Fixtures from API</button>
-        <button class="btn btn-success" onclick="syncScoresFromApi()">🔄 Sync Fixtures and Scores</button>
+        <button class="btn btn-primary" onclick="syncScoresOnlyFromApi()">⚡ Sync Scores Only</button>
+        <button class="btn btn-outline-warning" onclick="syncScoresFromApi()">🔄 Sync Fixtures &amp; Scores (full)</button>
       </div>
+      <p class="text-muted small mt-2 mb-0"><strong>Sync Scores Only</strong> — updates match results without changing team assignments or fixture structure. Use this after the group stage is set.<br>
+      <strong>Sync Fixtures &amp; Scores (full)</strong> — rewrites all match data from the API, including team names. Can corrupt the knockout bracket if the API has wrong data.</p>
       <div id="api-status" class="mt-2 small text-muted"></div>
     </div>
   </div>
 
-  <!-- ── 3. Manual Score Entry ─────────────────────────── -->
+  <!-- ── 3. Reset Corrupted Fixture ──────────────────── -->
+  <div class="card mb-4 border-danger">
+    <div class="card-header bg-danger text-white fw-bold">🔧 Reset Corrupted Fixture</div>
+    <div class="card-body">
+      <p class="text-muted small">If a sync overwrote a knockout match with wrong team data, use this to wipe that match back to a clean slate.
+        Team names will resolve automatically from group standings. Scores can be re-entered manually or via <em>Sync Scores Only</em> once the match is played.
+        User predictions are <strong>not</strong> affected.</p>
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Match ID to reset</label>
+          <input type="text" id="reset-match-id" class="form-control" placeholder="e.g. 82"/>
+        </div>
+        <div class="col-md-3">
+          <button class="btn btn-danger w-100" onclick="resetFixture()">Reset Fixture</button>
+        </div>
+      </div>
+      <div id="reset-status" class="small text-muted mt-2"></div>
+    </div>
+  </div>
+
+  <!-- ── 4. Manual Score Entry ─────────────────────────── -->
   <div class="card mb-4">
     <div class="card-header bg-dark text-white fw-bold">✏️ Manual Score Entry</div>
     <div class="card-body">

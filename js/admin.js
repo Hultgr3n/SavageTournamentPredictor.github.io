@@ -164,6 +164,66 @@ async function syncScoresFromApi() {
   showToast('Scores synced!');
 }
 
+// ── Sync scores only (never rewrites fixture structure) ──
+async function syncScoresOnlyFromApi() {
+  const token = document.getElementById('api-token-input').value.trim();
+  if (!token) { showToast('Save an API key first.', 'warning'); return; }
+  setApiStatus('⏳ Syncing scores only (team assignments unchanged)…');
+
+  const gamesData = await safeApiFetch(`${API_BASE}/matches`, 'GET', null, token);
+  if (!gamesData) { setApiStatus('❌ Failed to fetch data from API.'); return; }
+
+  const gameList = extractList(gamesData, ['games', 'data', 'matches', 'results', 'items']);
+  if (gameList.length === 0) { setApiStatus('❌ No games returned from API.'); return; }
+
+  let updated = 0;
+  const CHUNK = 400;
+  for (let i = 0; i < gameList.length; i += CHUNK) {
+    const batch = db.batch();
+    for (const g of gameList.slice(i, i + CHUNK)) {
+      const matchId = String(g.id ?? g.match_number ?? g.matchId ?? g.match_id ?? '');
+      if (!matchId) continue;
+      const docRef = db.collection('matches').doc(matchId);
+      const isFinished = toMatchFinished(g)
+        && toMaybeNumber(g.home_score) !== null
+        && toMaybeNumber(g.away_score) !== null;
+      // ONLY write score fields — never homeTeam, awayTeam, type, group, kickoffUtc, etc.
+      batch.set(docRef, {
+        actualHome: toMaybeNumber(g.home_score),
+        actualAway: toMaybeNumber(g.away_score),
+        finished: isFinished
+      }, { merge: true });
+      updated++;
+    }
+    await batch.commit();
+  }
+  await db.collection('config').doc('settings').set(
+    { lastSync: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  setApiStatus(`✅ Scores synced for ${updated} matches. Fixture structure unchanged.`);
+  showToast('Scores synced!');
+}
+
+// ── Reset a corrupted match fixture ────────────────────────
+// Wipes team names and scores for one match so the bracket resolves
+// teams from group standings. User predictions are untouched.
+async function resetFixture() {
+  const matchId = document.getElementById('reset-match-id').value.trim();
+  if (!matchId) { showToast('Enter a match ID.', 'warning'); return; }
+  const statusEl = document.getElementById('reset-status');
+  statusEl.textContent = '⏳ Resetting…';
+  await db.collection('matches').doc(matchId).set({
+    homeTeam: '',
+    awayTeam: '',
+    homeFlag: '',
+    awayFlag: '',
+    finished: false,
+    actualHome: null,
+    actualAway: null
+  }, { merge: true });
+  statusEl.textContent = `✅ Match ${matchId} reset. Team names now resolve from group standings.`;
+  showToast(`Match ${matchId} fixture reset.`);
+}
+
 // ── Manual score entry ──────────────────────────────────
 async function saveManualScore() {
   const matchId  = document.getElementById('manual-match-id').value.trim();
