@@ -1,7 +1,7 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
-const KO_VERSION = '20260629a';
+const KO_VERSION = '20260629b';
 console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
@@ -719,27 +719,28 @@ function getTeamsFromGroups(groupLetters) {
 function getActualWinnerName(m) {
   if (!m) return '';
 
-  // Trust explicit winner fields only when the API confirms the match is finished
-  if (m.finished) {
-    const explicitWinner = String(
-      m.winnerTeam || m.winner_team_name || m.winner || m.winnerName || ''
-    ).trim();
-    if (explicitWinner) return explicitWinner;
-  }
-
-  // Score-based detection works regardless of the finished flag
+  // Score-based detection is the most reliable source — check it first.
+  // Explicit API winner fields are often stale placeholders (e.g. winner: "Team").
   const home = Number(m.actualHome);
   const away = Number(m.actualAway);
   if (Number.isFinite(home) && Number.isFinite(away)) {
     if (home > away) {
       const name = String(m.homeTeam || '').trim();
-      // Fallback to group-snapshot resolution when homeTeam was cleared
       return name || getSideDescriptor(m, 'home', new Set()).rawLabel || '';
     }
     if (away > home) {
       const name = String(m.awayTeam || '').trim();
       return name || getSideDescriptor(m, 'away', new Set()).rawLabel || '';
     }
+  }
+
+  // Fallback: explicit winner field (only useful for penalty shootout results
+  // where score is level but a winner exists)
+  if (m.finished) {
+    const explicitWinner = String(
+      m.winnerTeam || m.winner_team_name || m.winnerName || ''
+    ).trim();
+    if (explicitWinner) return explicitWinner;
   }
 
   return '';
@@ -1037,10 +1038,11 @@ function updateDemoSummary() {
     return pred.winnerSide === 'home' || pred.winnerSide === 'away';
   }).length;
 
+  // A match is "played" when finished=true and valid scores are present.
+  // We intentionally do NOT require kickoffUtc to be in the past — placeholder
+  // dates stored in Firestore are often wrong (e.g. July placeholder for a June match).
   const isPlayed = (m) => {
-    const kMs = m.kickoffUtc ? new Date(m.kickoffUtc).getTime() : 0;
-    return (kMs > 0 && !isNaN(kMs) && kMs < Date.now())
-      && m.finished
+    return m.finished === true
       && m.actualHome != null && m.actualAway != null
       && Number.isFinite(Number(m.actualHome)) && Number.isFinite(Number(m.actualAway));
   };
