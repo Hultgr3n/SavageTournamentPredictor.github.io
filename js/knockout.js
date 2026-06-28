@@ -1047,7 +1047,7 @@ function updateDemoSummary() {
     const predSide = (demoPreds[m.id] || {}).winnerSide || '';
     if (actualSide && predSide && actualSide === predSide) {
       correct++;
-      totalPts += m.type === 'final' ? 5 : 1;
+      totalPts += m.type === 'final' ? 10 : 5;
     }
   }
 
