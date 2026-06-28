@@ -216,7 +216,15 @@ async function loadUsers() {
 
       predSnap.forEach((doc) => {
         const p = doc.data() || {};
-        if (p.home !== null && p.away !== null && p.home !== undefined && p.away !== undefined && p.home !== '' && p.away !== '') {
+        // Group stage: both score fields present
+        const hasScore = p.home !== null && p.away !== null &&
+                         p.home !== undefined && p.away !== undefined &&
+                         p.home !== '' && p.away !== '';
+        // Knockout stage: winner side recorded (winnerSide written by save fn,
+        // winnerSideDemo written by the demo/edit flow)
+        const hasWinner = p.winnerSide === 'home' || p.winnerSide === 'away' ||
+                          p.winnerSideDemo === 'home' || p.winnerSideDemo === 'away';
+        if (hasScore || hasWinner) {
           completedPredictions++;
         }
       });
