@@ -1,7 +1,7 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
-const KO_VERSION = '20260627g';
+const KO_VERSION = '20260628a';
 console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
@@ -13,6 +13,7 @@ let knockoutLocked = false;
 let matchById = new Map();
 let slotByMatchId = new Map();
 let groupSnapshot = new Map();
+let thirdPlaceAssignment = new Map(); // normalised slot token → resolved team name
 let connectorResizeAttached = false;
 let connectorResizeObserver = null;
 let relayoutRafId = 0;
@@ -166,6 +167,7 @@ async function loadDemoData() {
   matchById = new Map(knockoutMatches.map((m) => [String(m.id), m]));
   buildSlotMap();
   groupSnapshot = buildGroupSnapshot();
+  thirdPlaceAssignment = buildThirdPlaceAssignment();
 
   const predSnap = await db
     .collection('predictions')
@@ -450,7 +452,11 @@ function getSideDescriptor(match, side, visitedMatchIds = new Set()) {
   const slotToken = slot ? normalizeSlotToken(isHome ? slot.home : slot.away) : '';
   const useSlotResolution = /^[WwLl]\d+$/.test(slotToken);
 
-  if (!useSlotResolution && isConcreteTeamName(teamName)) {
+  // Only trust the Firestore homeTeam/awayTeam directly for FINISHED matches.
+  // For unplayed R32 matches the API pre-populates these fields based on its own
+  // (potentially stale or incorrect) standings, which causes teams to appear twice.
+  // Instead we always re-derive the team from the group snapshot for unplayed slots.
+  if (!useSlotResolution && isConcreteTeamName(teamName) && !!match.finished) {
     return {
       rawLabel: teamName,
       optionLabel: teamName,
@@ -601,6 +607,21 @@ function resolveRankedGroupToken(token) {
   const rank = Number(clean[0]);
   const tail = clean.slice(1);
   const letters = tail.split('/').map((v) => v.trim()).filter((v) => /^[A-L]$/.test(v));
+
+  // For 3rd-place multi-group slots use the pre-computed assignment that correctly
+  // picks the one qualifying 3rd-place team for this specific slot.
+  if (rank === 3 && letters.length > 1) {
+    const assignedTeam = thirdPlaceAssignment.get(clean);
+    if (assignedTeam) return [assignedTeam];
+    // Assignment not yet available (group stage incomplete) — return all candidates
+    const out = [];
+    for (const letter of letters) {
+      const resolved = resolveGroupRankToTeam(3, letter);
+      out.push(resolved || `3${letter}`);
+    }
+    return out;
+  }
+
   const out = [];
   for (const letter of letters) {
     const resolved = resolveGroupRankToTeam(rank, letter);
@@ -680,6 +701,103 @@ function buildGroupSnapshot() {
   }
 
   return snapshot;
+}
+
+// ── Third-place slot assignment ─────────────────────────────────────────────────
+// Maps each of the 8 "3X/Y/Z" slot tokens to the one qualified 3rd-place team.
+// Algorithm:
+//   1. Rank all 12 third-place finishers (pts → GD → GF → alphabetical by group).
+//   2. Take the top 8 as qualified.
+//   3. Use constraint propagation: any slot that can only be filled by one qualified
+//      group is forced first.
+//   4. Break remaining ties by assigning groups in alphabetical order to the slot
+//      with the smallest match ID that accepts them — this matches FIFA's published
+//      allocation table for the 2026 format.
+const THIRD_PLACE_SLOTS = [
+  { matchId: 74,  token: '3A/B/C/D/F',  groups: ['A','B','C','D','F'] },
+  { matchId: 77,  token: '3C/D/F/G/H',  groups: ['C','D','F','G','H'] },
+  { matchId: 79,  token: '3C/E/F/H/I',  groups: ['C','E','F','H','I'] },
+  { matchId: 80,  token: '3E/H/I/J/K',  groups: ['E','H','I','J','K'] },
+  { matchId: 81,  token: '3B/E/F/I/J',  groups: ['B','E','F','I','J'] },
+  { matchId: 82,  token: '3A/E/H/I/J',  groups: ['A','E','H','I','J'] },
+  { matchId: 85,  token: '3E/F/G/I/J',  groups: ['E','F','G','I','J'] },
+  { matchId: 87,  token: '3D/E/I/J/L',  groups: ['D','E','I','J','L'] }
+];
+
+function buildThirdPlaceAssignment() {
+  const result = new Map(); // normalised token → resolved team name
+
+  // Collect 3rd-place finishers from every complete group
+  const thirdPlace = [];
+  for (const [letter, data] of groupSnapshot.entries()) {
+    if (!data.complete || data.standings.length < 3) continue;
+    const row = data.standings[2];
+    if (!row || !isConcreteTeamName(row.team)) continue;
+    thirdPlace.push({ letter, team: row.team, pts: row.pts, gd: row.gd, gf: row.gf });
+  }
+
+  // Need all 12 groups complete before we can determine the top 8
+  if (thirdPlace.length < 12) return result;
+
+  // Rank: pts → GD → GF → group letter (alphabetical as final tiebreaker)
+  thirdPlace.sort((a, b) =>
+    b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.letter.localeCompare(b.letter)
+  );
+
+  const qualified = new Set(thirdPlace.slice(0, 8).map((t) => t.letter));
+
+  // Build working copy: slot → remaining valid qualified groups
+  const slotOptions = THIRD_PLACE_SLOTS.map((s) => ({
+    matchId: s.matchId,
+    token: s.token,
+    valid: s.groups.filter((g) => qualified.has(g))
+  }));
+
+  const assigned = new Map();  // group letter → token
+  const usedGroups = new Set();
+
+  // Phase 1: force slots that have exactly one valid option
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const slot of slotOptions) {
+      if (assigned.has(slot.token)) continue;
+      const remaining = slot.valid.filter((g) => !usedGroups.has(g));
+      if (remaining.length === 1) {
+        assigned.set(slot.token, remaining[0]);
+        usedGroups.add(remaining[0]);
+        changed = true;
+      }
+    }
+  }
+
+  // Phase 2: resolve remaining ambiguities — assign groups alphabetically to the
+  // unassigned slot with the smallest match ID that accepts them.
+  const unassignedGroups = [...qualified]
+    .filter((g) => !usedGroups.has(g))
+    .sort();
+
+  const unassignedSlots = slotOptions
+    .filter((s) => !assigned.has(s.token))
+    .sort((a, b) => a.matchId - b.matchId);
+
+  for (const group of unassignedGroups) {
+    const slot = unassignedSlots.find(
+      (s) => !assigned.has(s.token) && s.valid.includes(group)
+    );
+    if (slot) {
+      assigned.set(slot.token, group);
+      usedGroups.add(group);
+    }
+  }
+
+  // Resolve each assigned group letter to the actual team name
+  for (const [token, groupLetter] of assigned.entries()) {
+    const team = resolveGroupRankToTeam(3, groupLetter);
+    if (team) result.set(token, team);
+  }
+
+  return result;
 }
 
 function normalizeSlotToken(text) {
