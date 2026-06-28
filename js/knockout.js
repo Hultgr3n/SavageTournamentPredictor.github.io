@@ -1,7 +1,7 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
-const KO_VERSION = '20260629b';
+const KO_VERSION = '20260629c';
 console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
@@ -726,11 +726,12 @@ function getActualWinnerName(m) {
   if (Number.isFinite(home) && Number.isFinite(away)) {
     if (home > away) {
       const name = String(m.homeTeam || '').trim();
-      return name || getSideDescriptor(m, 'home', new Set()).rawLabel || '';
+      // isConcreteTeamName rejects placeholders like "Team", "TBD", "W73", etc.
+      return (isConcreteTeamName(name) ? name : null) || getSideDescriptor(m, 'home', new Set()).rawLabel || '';
     }
     if (away > home) {
       const name = String(m.awayTeam || '').trim();
-      return name || getSideDescriptor(m, 'away', new Set()).rawLabel || '';
+      return (isConcreteTeamName(name) ? name : null) || getSideDescriptor(m, 'away', new Set()).rawLabel || '';
     }
   }
 
@@ -1056,7 +1057,10 @@ function updateDemoSummary() {
     const predSide = (demoPreds[m.id] || {}).winnerSide || '';
     if (actualSide && predSide && actualSide === predSide) {
       correct++;
-      totalPts += m.type === 'final' ? 10 : 5;
+      // Only the final (M104) is worth 10 pts. All other knockout matches are 5 pts.
+      // We check by ID rather than m.type because Firestore docs may have stale type
+      // values written by early API syncs before fixtures were confirmed.
+      totalPts += String(m.id) === '104' ? 10 : 5;
     }
   }
 
