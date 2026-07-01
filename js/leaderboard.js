@@ -117,8 +117,13 @@ async function buildLeaderboard(myUid) {
     predSnap.forEach(d => { preds[d.id] = d.data(); });
 
     let totalPts = 0;
-    let predicted = 0;
+    let groupPts = 0;
+    let knockoutPts = 0;
+    let groupPredicted = 0;
+    let knockoutPredicted = 0;
     let exactScores = 0;
+    const finishedGroup = finishedMatches.filter(([, m]) => m.type === 'group').length;
+    const finishedKnockout = finishedMatches.filter(([, m]) => m.type !== 'group').length;
 
     for (const [matchId, m] of finishedMatches) {
       const pred = preds[matchId];
@@ -133,9 +138,15 @@ async function buildLeaderboard(myUid) {
 
       if (pts === null) continue;
       totalPts += pts;
-      predicted++;
-      if (m.type === 'group' && pts === 3 && Number(pred.home) === Number(m.actualHome) && Number(pred.away) === Number(m.actualAway)) {
-        exactScores++;
+      if (m.type === 'group') {
+        groupPts += pts;
+        groupPredicted++;
+        if (pts === 3 && Number(pred.home) === Number(m.actualHome) && Number(pred.away) === Number(m.actualAway)) {
+          exactScores++;
+        }
+      } else {
+        knockoutPts += pts;
+        knockoutPredicted++;
       }
     }
 
@@ -143,9 +154,13 @@ async function buildLeaderboard(myUid) {
       uid: u.uid,
       username: u.username || 'Unknown',
       totalPts,
-      predicted,
+      groupPts,
+      knockoutPts,
+      groupPredicted,
+      knockoutPredicted,
       exactScores,
-      gamesPlayed: finishedMatches.length
+      finishedGroup,
+      finishedKnockout
     };
   }));
 
@@ -169,7 +184,8 @@ async function buildLeaderboard(myUid) {
       <td>${rankEmoji(i)}</td>
       <td>${escHtml(r.username)}${isMe ? ' <span class="badge bg-success">You</span>' : ''}</td>
       <td class="text-center fw-bold fs-5">${r.totalPts}</td>
-      <td class="text-center">${r.predicted}/${r.gamesPlayed}</td>
+      <td class="text-center">${r.groupPredicted}/${r.finishedGroup}<br><span class="text-muted small">${r.groupPts} pts</span></td>
+      <td class="text-center">${r.knockoutPredicted}/${r.finishedKnockout}<br><span class="text-muted small">${r.knockoutPts} pts</span></td>
       <td class="text-center">${r.exactScores}</td>
     </tr>`;
   }).join('');
@@ -182,7 +198,8 @@ async function buildLeaderboard(myUid) {
             <th>#</th>
             <th>Player</th>
             <th class="text-center">Points</th>
-            <th class="text-center">Predicted</th>
+            <th class="text-center">Predicted Group Stage</th>
+            <th class="text-center">Predicted Knockout</th>
             <th class="text-center">Exact Group Scores 🎯</th>
           </tr>
         </thead>
