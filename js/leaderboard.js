@@ -184,8 +184,8 @@ async function buildLeaderboard(myUid) {
       <td>${rankEmoji(i)}</td>
       <td>${escHtml(r.username)}${isMe ? ' <span class="badge bg-success">You</span>' : ''}</td>
       <td class="text-center fw-bold fs-5">${r.totalPts}</td>
-      <td class="text-center">${r.groupPredicted}/${r.finishedGroup}<br><span class="text-muted small">${r.groupPts} pts</span></td>
-      <td class="text-center">${r.knockoutPredicted}/${r.finishedKnockout}<br><span class="text-muted small">${r.knockoutPts} pts</span></td>
+      <td class="text-center">${r.groupPts} pts<br><span class="text-muted small">${r.groupPredicted}/${r.finishedGroup}</span></td>
+      <td class="text-center">${r.knockoutPts} pts<br><span class="text-muted small">${r.knockoutPredicted}/${r.finishedKnockout}</span></td>
       <td class="text-center">${r.exactScores}</td>
     </tr>`;
   }).join('');
