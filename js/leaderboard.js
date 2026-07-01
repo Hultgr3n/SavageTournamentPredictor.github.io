@@ -46,7 +46,7 @@ function scoreKnockoutPrediction(pred, match) {
 
   const predictedWinner = String(pred?.winner || '').trim();
   if (predictedWinner) {
-    const weight = match.type === 'final' ? 5 : 1;
+    const weight = match.type === 'final' ? 10 : 5;
     return predictedWinner === actualWinner ? weight : 0;
   }
 
@@ -57,7 +57,7 @@ function scoreKnockoutPrediction(pred, match) {
       ? String(match.homeTeam || '').trim()
       : String(match.awayTeam || '').trim();
     if (!predictedTeam) return null;
-    const weight = match.type === 'final' ? 5 : 1;
+    const weight = match.type === 'final' ? 10 : 5;
     return predictedTeam === actualWinner ? weight : 0;
   }
 
@@ -73,7 +73,7 @@ function scoreKnockoutPrediction(pred, match) {
   if (!Number.isFinite(ph) || !Number.isFinite(pa) || ph === pa) return null;
 
   const predictedByScore = ph > pa ? String(match.homeTeam || '').trim() : String(match.awayTeam || '').trim();
-  const weight = match.type === 'final' ? 5 : 1;
+  const weight = match.type === 'final' ? 10 : 5;
   return predictedByScore === actualWinner ? weight : 0;
 }
 
@@ -190,7 +190,7 @@ async function buildLeaderboard(myUid) {
       </table>
     </div>
     <p class="text-muted small">Group stage: 1 per correct goal + 1 for correct outcome (max 3 per match).
-    Knockout stage: correct winner = 1 point, and correct tournament winner (final) = 5 points.
+    Knockout stage: correct winner = 5 points, and correct tournament winner (final) = 10 points.
     Tiebreaker: most exact group scores.</p>`;
 
   document.getElementById('last-updated').textContent =
