@@ -370,6 +370,68 @@ function buildBracketBranches() {
   return { left, right };
 }
 
+// Resolves a W/L slot token (e.g. "W74", "L101") to the team that actually
+// advanced there based on match results — ignoring user predictions.
+function resolveActualTeamFromToken(token, visitedMatchIds = new Set()) {
+  const normalized = normalizeSlotToken(String(token || '').trim());
+  if (!normalized) return '';
+  if (isConcreteTeamName(normalized)) return normalized;
+
+  const wlMatch = normalized.match(/^([WL])(\d+)$/i);
+  if (!wlMatch) return '';
+  const isLoser = wlMatch[1].toUpperCase() === 'L';
+  const refId = wlMatch[2];
+
+  if (visitedMatchIds.has(refId)) return '';
+  const visited = new Set(visitedMatchIds);
+  visited.add(refId);
+
+  const refMatch = matchById.get(refId);
+  if (!refMatch || !refMatch.finished
+      || refMatch.actualHome == null || refMatch.actualAway == null
+      || !Number.isFinite(Number(refMatch.actualHome))
+      || !Number.isFinite(Number(refMatch.actualAway))) {
+    return '';
+  }
+
+  const winnerSide = getActualWinnerSide(refMatch);
+  if (!winnerSide) return '';
+
+  const relevantSide = isLoser ? (winnerSide === 'home' ? 'away' : 'home') : winnerSide;
+
+  // Try the concrete team name stored on the match document first
+  const directName = relevantSide === 'home'
+    ? String(refMatch.homeTeam || '').trim()
+    : String(refMatch.awayTeam || '').trim();
+  if (isConcreteTeamName(directName)) return directName;
+
+  // Placeholder team name — use getActualWinnerName for W-tokens
+  if (!isLoser) {
+    const winner = getActualWinnerName(refMatch);
+    if (isConcreteTeamName(winner)) return winner;
+  }
+
+  // Recurse through the slot map (handles chained W/L tokens in later rounds)
+  const slotForRef = slotByMatchId.get(refId);
+  if (slotForRef) {
+    const nextToken = relevantSide === 'home' ? slotForRef.home : slotForRef.away;
+    return resolveActualTeamFromToken(nextToken, visited);
+  }
+  return '';
+}
+
+function renderActualIncoming(actualTeam, predictedTeam) {
+  if (!actualTeam) return '';
+  const matches = actualTeam === predictedTeam;
+  const cls = matches ? 'ko-actual-correct' : 'ko-actual-wrong';
+  const flagUrl = resolveFlagForTeamName(actualTeam);
+  const flagImg = flagUrl
+    ? `<img class="flag-icon" src="${escHtml(flagUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" style="width:14px;height:10px;margin-right:3px;"/>`
+    : '';
+  const icon = matches ? '✓' : '↑';
+  return `<div class="ko-actual-incoming ${cls}">${flagImg}<span>${escHtml(icon)} ${escHtml(actualTeam)}</span></div>`;
+}
+
 function renderMatchNode(m, meta = {}) {
   const stageLocked = isPredictionLocked(settings, 'knockout');
   const isFinished = !!m.finished;
@@ -396,16 +458,24 @@ function renderMatchNode(m, meta = {}) {
   const dataSide = escHtml(String(meta.side || 'unknown'));
   const dataIndex = Number.isFinite(Number(meta.index)) ? Number(meta.index) : 0;
 
+  // Resolve actual advancing teams for W/L slots (round 16+)
+  const slot = slotByMatchId.get(String(m.id));
+  const homeSlotToken = slot ? normalizeSlotToken(slot.home) : '';
+  const awaySlotToken = slot ? normalizeSlotToken(slot.away) : '';
+  const isWLToken = (t) => /^[WL]\d+$/i.test(t);
+  const homeActual = isWLToken(homeSlotToken) ? resolveActualTeamFromToken(homeSlotToken) : '';
+  const awayActual = isWLToken(awaySlotToken) ? resolveActualTeamFromToken(awaySlotToken) : '';
+
   return `
     <article class="ko-match ${isFinished ? 'ko-match-finished' : ''}"
       data-stage="${dataStage}" data-side="${dataSide}" data-index="${dataIndex}" data-match-id="${escHtml(String(m.id))}">
       <div class="ko-meta"><span class="ko-match-num">M${escHtml(String(m.id))}</span> ${escHtml(dateStr)} ${winnerBadge}</div>
-      <div class="ko-team">${renderTeamLabel(homeDesc.rawLabel, homeDesc.flagUrl)}</div>
+      <div class="ko-team"><div class="ko-team-row">${renderTeamLabel(homeDesc.rawLabel, homeDesc.flagUrl)}</div>${renderActualIncoming(homeActual, homeDesc.rawLabel)}</div>
       <div class="ko-picker">
         <select class="form-select form-select-sm ko-winner-select"
           data-match="${escHtml(m.id)}" ${disabled}>${optionHtml}</select>
       </div>
-      <div class="ko-team">${renderTeamLabel(awayDesc.rawLabel, awayDesc.flagUrl)}</div>
+      <div class="ko-team"><div class="ko-team-row">${renderTeamLabel(awayDesc.rawLabel, awayDesc.flagUrl)}</div>${renderActualIncoming(awayActual, awayDesc.rawLabel)}</div>
     </article>`;
 }
 

@@ -255,9 +255,31 @@ td:first-child {
 
 .ko-team {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   min-height: 30px;
   font-size: 0.86rem;
+}
+
+.ko-team-row {
+  display: flex;
+  align-items: center;
+}
+
+.ko-actual-incoming {
+  display: flex;
+  align-items: center;
+  font-size: 0.7rem;
+  margin-top: 2px;
+  opacity: 0.9;
+}
+
+.ko-actual-correct {
+  color: #3dd68c;
+}
+
+.ko-actual-wrong {
+  color: #ff8a80;
 }
 
 .ko-picker {
