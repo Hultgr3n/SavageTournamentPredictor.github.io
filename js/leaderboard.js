@@ -58,6 +58,11 @@ function getActualWinnerSide(match) {
 
 function scoreKnockoutPrediction(pred, match) {
   if (!match || !match.finished) return null;
+  // Require valid actual scores — mirrors knockout.html isPlayed check
+  if (match.actualHome == null || match.actualAway == null ||
+      !Number.isFinite(Number(match.actualHome)) || !Number.isFinite(Number(match.actualAway))) {
+    return null;
+  }
 
   // Side prediction ('home' | 'away') from bracket page — compare sides directly
   // to avoid mismatches when homeTeam/awayTeam still hold placeholder values (e.g. "W73")
@@ -138,7 +143,7 @@ async function buildLeaderboard(myUid) {
     let groupPts = 0;
     let knockoutPts = 0;
     let groupPredicted = 0;
-    let knockoutPredicted = 0;
+    let knockoutCorrect = 0;
     let exactScores = 0;
     const finishedGroup = finishedMatches.filter(([, m]) => m.type === 'group').length;
     const finishedKnockout = finishedMatches.filter(([, m]) => m.type && m.type !== 'group').length;
@@ -168,7 +173,7 @@ async function buildLeaderboard(myUid) {
         }
       } else {
         knockoutPts += pts;
-        knockoutPredicted++;
+        if (pts > 0) knockoutCorrect++;
       }
     }
 
@@ -179,7 +184,7 @@ async function buildLeaderboard(myUid) {
       groupPts,
       knockoutPts,
       groupPredicted,
-      knockoutPredicted,
+      knockoutCorrect,
       exactScores,
       finishedGroup,
       finishedKnockout
@@ -207,7 +212,7 @@ async function buildLeaderboard(myUid) {
       <td>${escHtml(r.username)}${isMe ? ' <span class="badge bg-success">You</span>' : ''}</td>
       <td class="text-center fw-bold fs-5">${r.totalPts}</td>
       <td class="text-center">${r.groupPts} pts<br><span class="text-muted small">${r.groupPredicted}/${r.finishedGroup}</span></td>
-      <td class="text-center">${r.knockoutPts} pts<br><span class="text-muted small">${r.knockoutPredicted}/${r.finishedKnockout}</span></td>
+      <td class="text-center">${r.knockoutPts} pts<br><span class="text-muted small">${r.knockoutCorrect}/${r.finishedKnockout} winners</span></td>
       <td class="text-center">${r.exactScores}</td>
     </tr>`;
   }).join('');
