@@ -141,22 +141,26 @@ async function buildLeaderboard(myUid) {
     let knockoutPredicted = 0;
     let exactScores = 0;
     const finishedGroup = finishedMatches.filter(([, m]) => m.type === 'group').length;
-    const finishedKnockout = finishedMatches.filter(([, m]) => m.type !== 'group').length;
+    const finishedKnockout = finishedMatches.filter(([, m]) => m.type && m.type !== 'group').length;
 
     for (const [matchId, m] of finishedMatches) {
       const pred = preds[matchId];
       if (!pred) continue;
 
       let pts = null;
-      if (m.type === 'group') {
+      const isGroup = m.type === 'group';
+      const isKnockout = m.type && m.type !== 'group';
+      if (isGroup) {
         pts = calcPoints(pred.home, pred.away, m.actualHome, m.actualAway, true);
-      } else {
+      } else if (isKnockout) {
         pts = scoreKnockoutPrediction(pred, m);
+      } else {
+        continue; // unknown/missing type — skip to avoid phantom points
       }
 
       if (pts === null) continue;
       totalPts += pts;
-      if (m.type === 'group') {
+      if (isGroup) {
         groupPts += pts;
         groupPredicted++;
         if (pts === 3 && Number(pred.home) === Number(m.actualHome) && Number(pred.away) === Number(m.actualAway)) {
