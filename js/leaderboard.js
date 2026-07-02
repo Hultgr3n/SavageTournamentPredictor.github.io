@@ -39,8 +39,37 @@ function getActualWinnerName(match) {
   return '';
 }
 
+function getActualWinnerSide(match) {
+  // Derive winner side from scores first — most reliable, avoids placeholder team names
+  const home = Number(match.actualHome);
+  const away = Number(match.actualAway);
+  if (Number.isFinite(home) && Number.isFinite(away)) {
+    if (home > away) return 'home';
+    if (away > home) return 'away';
+  }
+  // Penalty/extra-time fallback: use explicit winner name vs team names
+  if (match.finished) {
+    const winner = getActualWinnerName(match);
+    if (winner && winner === String(match.homeTeam || '').trim()) return 'home';
+    if (winner && winner === String(match.awayTeam || '').trim()) return 'away';
+  }
+  return '';
+}
+
 function scoreKnockoutPrediction(pred, match) {
   if (!match || !match.finished) return null;
+
+  // Side prediction ('home' | 'away') from bracket page — compare sides directly
+  // to avoid mismatches when homeTeam/awayTeam still hold placeholder values (e.g. "W73")
+  const predictedSide = String(pred?.winnerSide || '').trim();
+  if (predictedSide === 'home' || predictedSide === 'away') {
+    const actualSide = getActualWinnerSide(match);
+    if (!actualSide) return null;
+    const weight = match.type === 'final' ? 10 : 5;
+    return predictedSide === actualSide ? weight : 0;
+  }
+
+  // Named winner prediction (legacy explicit team name)
   const actualWinner = getActualWinnerName(match);
   if (!actualWinner) return null;
 
@@ -48,17 +77,6 @@ function scoreKnockoutPrediction(pred, match) {
   if (predictedWinner) {
     const weight = match.type === 'final' ? 10 : 5;
     return predictedWinner === actualWinner ? weight : 0;
-  }
-
-  // Side prediction ('home' | 'away') from bracket page
-  const predictedSide = String(pred?.winnerSide || '').trim();
-  if (predictedSide === 'home' || predictedSide === 'away') {
-    const predictedTeam = predictedSide === 'home'
-      ? String(match.homeTeam || '').trim()
-      : String(match.awayTeam || '').trim();
-    if (!predictedTeam) return null;
-    const weight = match.type === 'final' ? 10 : 5;
-    return predictedTeam === actualWinner ? weight : 0;
   }
 
   // Legacy fallback for old knockout score entries.
