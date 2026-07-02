@@ -1,7 +1,7 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
-const KO_VERSION = '20260629c';
+const KO_VERSION = '20260702a';
 console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
