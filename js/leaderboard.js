@@ -56,13 +56,15 @@ function getActualWinnerSide(match) {
   return '';
 }
 
-function scoreKnockoutPrediction(pred, match) {
+function scoreKnockoutPrediction(pred, match, matchId) {
   if (!match || !match.finished) return null;
   // Require valid actual scores — mirrors knockout.html isPlayed check
   if (match.actualHome == null || match.actualAway == null ||
       !Number.isFinite(Number(match.actualHome)) || !Number.isFinite(Number(match.actualAway))) {
     return null;
   }
+  // Match ID 104 is the final (worth 10 pts). Mirrors knockout.js updateDemoSummary.
+  const weight = String(matchId) === '104' ? 10 : 5;
 
   // Side prediction ('home' | 'away') from bracket page — compare sides directly
   // to avoid mismatches when homeTeam/awayTeam still hold placeholder values (e.g. "W73")
@@ -70,7 +72,6 @@ function scoreKnockoutPrediction(pred, match) {
   if (predictedSide === 'home' || predictedSide === 'away') {
     const actualSide = getActualWinnerSide(match);
     if (!actualSide) return null;
-    const weight = match.type === 'final' ? 10 : 5;
     return predictedSide === actualSide ? weight : 0;
   }
 
@@ -80,7 +81,6 @@ function scoreKnockoutPrediction(pred, match) {
 
   const predictedWinner = String(pred?.winner || '').trim();
   if (predictedWinner) {
-    const weight = match.type === 'final' ? 10 : 5;
     return predictedWinner === actualWinner ? weight : 0;
   }
 
@@ -96,7 +96,6 @@ function scoreKnockoutPrediction(pred, match) {
   if (!Number.isFinite(ph) || !Number.isFinite(pa) || ph === pa) return null;
 
   const predictedByScore = ph > pa ? String(match.homeTeam || '').trim() : String(match.awayTeam || '').trim();
-  const weight = match.type === 'final' ? 10 : 5;
   return predictedByScore === actualWinner ? weight : 0;
 }
 
@@ -158,7 +157,7 @@ async function buildLeaderboard(myUid) {
       if (isGroup) {
         pts = calcPoints(pred.home, pred.away, m.actualHome, m.actualAway, true);
       } else if (isKnockout) {
-        pts = scoreKnockoutPrediction(pred, m);
+        pts = scoreKnockoutPrediction(pred, m, matchId);
       } else {
         continue; // unknown/missing type — skip to avoid phantom points
       }
