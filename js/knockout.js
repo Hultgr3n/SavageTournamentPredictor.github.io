@@ -1,7 +1,7 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
-const KO_VERSION = '20260704a';
+const KO_VERSION = '20260704b';
 console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
@@ -806,11 +806,26 @@ function getActualWinnerName(m) {
   const away = Number(m.actualAway);
   if (Number.isFinite(home) && Number.isFinite(away)) {
     if (home > away) {
+      // For W/L-token slots (R16+), the API pre-populates homeTeam/awayTeam with the
+      // "expected" team rather than the actual advancing team.  Resolve through the
+      // actual-results chain to get the correct name (e.g. Morocco, not Netherlands).
+      const slot = slotByMatchId.get(String(m.id));
+      const homeSlotToken = slot ? normalizeSlotToken(slot.home) : '';
+      if (/^[WwLl]\d+$/.test(homeSlotToken)) {
+        const resolved = resolveActualTeamFromToken(homeSlotToken);
+        if (resolved) return resolved;
+      }
       const name = String(m.homeTeam || '').trim();
       // isConcreteTeamName rejects placeholders like "Team", "TBD", "W73", etc.
       return (isConcreteTeamName(name) ? name : null) || getSideDescriptor(m, 'home', new Set()).rawLabel || '';
     }
     if (away > home) {
+      const slot = slotByMatchId.get(String(m.id));
+      const awaySlotToken = slot ? normalizeSlotToken(slot.away) : '';
+      if (/^[WwLl]\d+$/.test(awaySlotToken)) {
+        const resolved = resolveActualTeamFromToken(awaySlotToken);
+        if (resolved) return resolved;
+      }
       const name = String(m.awayTeam || '').trim();
       return (isConcreteTeamName(name) ? name : null) || getSideDescriptor(m, 'away', new Set()).rawLabel || '';
     }

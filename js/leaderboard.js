@@ -78,6 +78,54 @@ const SLOT_BY_MATCH_ID_LB = {
 
 // Resolve the team name the user intended to be in `predSide` of `matchId`
 // by following the W-token prediction chain through `allPreds` and `allMatches`.
+// Resolve the team that actually advanced into a W-token slot by following match
+// scores through the chain.  This avoids trusting homeTeam/awayTeam fields that
+// the API pre-populates with the "expected" team (e.g. Netherlands instead of Morocco).
+function lbResolveActualTeamFromWToken(token, allMatches, visited = new Set()) {
+  const wMatch = String(token || '').match(/^W(\d+)$/i);
+  if (!wMatch) return '';
+  const sourceId = wMatch[1];
+  if (visited.has(sourceId)) return '';
+  const next = new Set(visited);
+  next.add(sourceId);
+  const m = allMatches[sourceId];
+  if (!m) return '';
+  const h = Number(m.actualHome);
+  const a = Number(m.actualAway);
+  if (!Number.isFinite(h) || !Number.isFinite(a)) return '';
+  const ws = h > a ? 'home' : a > h ? 'away' : null;
+  if (!ws) return '';
+  // If the winning side of the source match is itself a W-token slot, recurse
+  const srcSlot = SLOT_BY_MATCH_ID_LB[Number(sourceId)];
+  if (srcSlot) {
+    const nextToken = ws === 'home' ? srcSlot.home : srcSlot.away;
+    if (/^W\d+$/i.test(String(nextToken || ''))) {
+      const chained = lbResolveActualTeamFromWToken(nextToken, allMatches, next);
+      if (chained) return chained;
+    }
+  }
+  const name = String(ws === 'home' ? (m.homeTeam || '') : (m.awayTeam || '')).trim();
+  return name && !/^(tbd|team)$/i.test(name) && !/^[WwLl]\d+$/.test(name) ? name : '';
+}
+
+// Get the actual winner name for a match, resolving W-token slots through the
+// real results chain rather than trusting stale homeTeam/awayTeam API fields.
+function getResolvedActualWinnerName(matchId, match, allMatches) {
+  const winnerSide = getActualWinnerSide(match);
+  if (!winnerSide) return '';
+  if (allMatches) {
+    const slot = SLOT_BY_MATCH_ID_LB[Number(matchId)];
+    if (slot) {
+      const token = String(winnerSide === 'home' ? slot.home : slot.away);
+      if (/^W\d+$/i.test(token)) {
+        const resolved = lbResolveActualTeamFromWToken(token, allMatches);
+        if (resolved) return resolved;
+      }
+    }
+  }
+  return getActualWinnerName(match);
+}
+
 function resolveExpectedTeamName(matchId, predSide, allPreds, allMatches, visited = new Set()) {
   const slot = SLOT_BY_MATCH_ID_LB[Number(matchId)];
   if (!slot) return null; // R32 or unknown — no chain needed
@@ -124,7 +172,7 @@ function scoreKnockoutPrediction(pred, match, matchId, allPreds, allMatches) {
     if (allPreds && allMatches) {
       const expectedTeam = resolveExpectedTeamName(matchId, predictedSide, allPreds, allMatches);
       if (expectedTeam) {
-        const actualTeam = getActualWinnerName(match);
+        const actualTeam = getResolvedActualWinnerName(matchId, match, allMatches);
         if (actualTeam) return expectedTeam === actualTeam ? weight : 0;
       }
     }
