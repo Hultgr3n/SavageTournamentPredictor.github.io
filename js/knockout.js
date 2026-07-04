@@ -1,7 +1,7 @@
 // ============================================================
 //  knockout.js - Knockout bracket predictions
 // ============================================================
-const KO_VERSION = '20260702a';
+const KO_VERSION = '20260704a';
 console.log('[knockout.js] version', KO_VERSION, 'loaded');
 
 let currentUser = null;
@@ -447,8 +447,19 @@ function renderMatchNode(m, meta = {}) {
     .join('');
 
   const hasActualWinner = !!actualWinnerName;
+  // Compare the predicted team (via prediction chain) against the actual winner.
+  // Side-only comparison is wrong for R16+ matches where the team in a W-token slot
+  // may differ from what the user originally predicted in a prior round.
+  let predIsCorrect = false;
+  if (predWinnerSide && actualWinnerName) {
+    const predDesc = getSideDescriptor(m, predWinnerSide);
+    const predWinnerName = predDesc.rawLabel;
+    predIsCorrect = predWinnerName && isConcreteTeamName(predWinnerName)
+      ? predWinnerName === actualWinnerName
+      : predWinnerSide === actualWinnerSide; // fallback when team is not yet resolvable
+  }
   const winnerBadge = hasActualWinner
-    ? `<span class="badge ${predWinnerSide && predWinnerSide === actualWinnerSide ? 'bg-success' : 'bg-dark'}">Actual winner: ${escHtml(actualWinnerName)}</span>`
+    ? `<span class="badge ${predIsCorrect ? 'bg-success' : 'bg-dark'}">Actual winner: ${escHtml(actualWinnerName)}</span>`
     : '';
 
   const dateStr = formatDateToEuropean(m.date || '');
@@ -1124,8 +1135,23 @@ function updateDemoSummary() {
   for (const m of knockoutMatches) {
     if (!isPlayed(m)) continue;
     const actualSide = getActualWinnerSide(m);
+    const actualName = getActualWinnerName(m);
     const predSide = (demoPreds[m.id] || {}).winnerSide || '';
-    if (actualSide && predSide && actualSide === predSide) {
+    if (!actualSide || !predSide) continue;
+    // Compare the predicted team (via prediction chain) against the actual winner.
+    // Side-only comparison is wrong for R16+ matches where the team in a W-token slot
+    // may differ from what the user originally predicted in a prior round.
+    let predIsCorrect;
+    if (actualName) {
+      const predDesc = getSideDescriptor(m, predSide);
+      const predName = predDesc.rawLabel;
+      predIsCorrect = predName && isConcreteTeamName(predName)
+        ? predName === actualName
+        : predSide === actualSide;
+    } else {
+      predIsCorrect = predSide === actualSide;
+    }
+    if (predIsCorrect) {
       correct++;
       // Only the final (M104) is worth 10 pts. All other knockout matches are 5 pts.
       // We check by ID rather than m.type because Firestore docs may have stale type

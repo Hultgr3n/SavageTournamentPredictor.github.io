@@ -56,7 +56,55 @@ function getActualWinnerSide(match) {
   return '';
 }
 
-function scoreKnockoutPrediction(pred, match, matchId) {
+// Mirrors the SLOT_BY_MATCH_ID constant in knockout.js — used for chain resolution.
+const SLOT_BY_MATCH_ID_LB = {
+  89: { home: 'W74', away: 'W77' },
+  90: { home: 'W73', away: 'W75' },
+  91: { home: 'W76', away: 'W78' },
+  92: { home: 'W79', away: 'W80' },
+  93: { home: 'W83', away: 'W84' },
+  94: { home: 'W81', away: 'W82' },
+  95: { home: 'W86', away: 'W88' },
+  96: { home: 'W85', away: 'W87' },
+  97: { home: 'W89', away: 'W90' },
+  98: { home: 'W93', away: 'W94' },
+  99: { home: 'W91', away: 'W92' },
+  100: { home: 'W95', away: 'W96' },
+  101: { home: 'W97', away: 'W98' },
+  102: { home: 'W99', away: 'W100' },
+  103: { home: 'L101', away: 'L102' },
+  104: { home: 'W101', away: 'W102' }
+};
+
+// Resolve the team name the user intended to be in `predSide` of `matchId`
+// by following the W-token prediction chain through `allPreds` and `allMatches`.
+function resolveExpectedTeamName(matchId, predSide, allPreds, allMatches, visited = new Set()) {
+  const slot = SLOT_BY_MATCH_ID_LB[Number(matchId)];
+  if (!slot) return null; // R32 or unknown — no chain needed
+  const token = predSide === 'home' ? slot.home : slot.away;
+  const wMatch = String(token || '').match(/^W(\d+)$/i);
+  if (!wMatch) return null; // Non-W token (e.g. group rank) — can't resolve here
+  const sourceId = wMatch[1];
+  if (visited.has(sourceId)) return null;
+  const nextVisited = new Set(visited);
+  nextVisited.add(sourceId);
+  const sourcePred = allPreds[sourceId] || {};
+  const sourceSide = sourcePred.winnerSide;
+  if (sourceSide !== 'home' && sourceSide !== 'away') return null;
+  const sourceMatch = allMatches[sourceId];
+  if (!sourceMatch) return null;
+  const teamName = String(
+    sourceSide === 'home' ? (sourceMatch.homeTeam || '') : (sourceMatch.awayTeam || '')
+  ).trim();
+  // If the team name is concrete, return it
+  if (teamName && !/^(tbd|team)$/i.test(teamName) && !/^[WwLl]\d+$/.test(teamName)) {
+    return teamName;
+  }
+  // Recurse for chained W-tokens
+  return resolveExpectedTeamName(sourceId, sourceSide, allPreds, allMatches, nextVisited);
+}
+
+function scoreKnockoutPrediction(pred, match, matchId, allPreds, allMatches) {
   if (!match || !match.finished) return null;
   // Require valid actual scores — mirrors knockout.html isPlayed check
   if (match.actualHome == null || match.actualAway == null ||
@@ -66,12 +114,20 @@ function scoreKnockoutPrediction(pred, match, matchId) {
   // Match ID 104 is the final (worth 10 pts). Mirrors knockout.js updateDemoSummary.
   const weight = String(matchId) === '104' ? 10 : 5;
 
-  // Side prediction ('home' | 'away') from bracket page — compare sides directly
-  // to avoid mismatches when homeTeam/awayTeam still hold placeholder values (e.g. "W73")
+  // Side prediction ('home' | 'away') from bracket page.
+  // For R16+ matches, also try team-name comparison via the prediction chain to
+  // handle cases where the team in a W-token slot differs from what was predicted.
   const predictedSide = String(pred?.winnerSide || '').trim();
   if (predictedSide === 'home' || predictedSide === 'away') {
     const actualSide = getActualWinnerSide(match);
     if (!actualSide) return null;
+    if (allPreds && allMatches) {
+      const expectedTeam = resolveExpectedTeamName(matchId, predictedSide, allPreds, allMatches);
+      if (expectedTeam) {
+        const actualTeam = getActualWinnerName(match);
+        if (actualTeam) return expectedTeam === actualTeam ? weight : 0;
+      }
+    }
     return predictedSide === actualSide ? weight : 0;
   }
 
@@ -157,7 +213,7 @@ async function buildLeaderboard(myUid) {
       if (isGroup) {
         pts = calcPoints(pred.home, pred.away, m.actualHome, m.actualAway, true);
       } else if (isKnockout) {
-        pts = scoreKnockoutPrediction(pred, m, matchId);
+        pts = scoreKnockoutPrediction(pred, m, matchId, preds, matches);
       } else {
         continue; // unknown/missing type — skip to avoid phantom points
       }
