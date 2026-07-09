@@ -16,6 +16,7 @@ let groupSnapshot = new Map();
 let connectorResizeAttached = false;
 let connectorResizeObserver = null;
 let relayoutRafId = 0;
+let saveKnockoutScoreTimer = null;
 
 const KNOCKOUT_ORDER = ['round32', 'round16', 'qf', 'sf', 'final'];
 const STAGE_LABEL = {
@@ -1178,6 +1179,18 @@ function updateDemoSummary() {
   document.getElementById('summary-bar').innerHTML =
     `<span>Knockout picks: <strong>${picked}/${total}</strong> selected</span>` +
     `<span class="badge bg-white text-success fs-6">${totalPts} pts (${correct}/${finished} winners)</span>`;
+
+  // Persist score to the user doc so the leaderboard can read it directly
+  // instead of re-running the calculation (which may diverge due to stale Firestore fields).
+  if (currentUser) {
+    clearTimeout(saveKnockoutScoreTimer);
+    saveKnockoutScoreTimer = setTimeout(() => {
+      db.collection('users').doc(currentUser.uid).set(
+        { knockoutPts: totalPts, knockoutCorrect: correct, knockoutFinished: finished },
+        { merge: true }
+      ).catch(() => {});
+    }, 1500);
+  }
 }
 
 async function saveAllDemoKnockout() {
