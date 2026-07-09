@@ -270,7 +270,11 @@ async function resetFixture() {
     awayFlag: '',
     finished: false,
     actualHome: null,
-    actualAway: null
+    actualAway: null,
+    winnerTeam: '',
+    winner_team_name: '',
+    winner: '',
+    winnerName: ''
   }, { merge: true });
   statusEl.textContent = `✅ Match ${matchId} reset. Team names now resolve from group standings.`;
   showToast(`Match ${matchId} fixture reset.`);

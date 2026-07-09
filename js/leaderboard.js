@@ -26,17 +26,20 @@ function attachLeaderboardAutoRefresh(myUid) {
 function getActualWinnerName(match) {
   if (!match || !match.finished) return '';
 
+  // Check scores first — most reliable, avoids stale winnerTeam from resets.
+  // Only fall back to explicit winner fields for equal-score matches (penalties/ET).
+  const home = Number(match.actualHome);
+  const away = Number(match.actualAway);
+  if (Number.isFinite(home) && Number.isFinite(away)) {
+    if (home > away) return String(match.homeTeam || '').trim();
+    if (away > home) return String(match.awayTeam || '').trim();
+  }
+
+  // Equal scores (penalty/ET): use explicit winner field as tiebreaker.
   const explicitWinner = String(
     match.winnerTeam || match.winner_team_name || match.winner || match.winnerName || ''
   ).trim();
-  if (explicitWinner) return explicitWinner;
-
-  const home = Number(match.actualHome);
-  const away = Number(match.actualAway);
-  if (!Number.isFinite(home) || !Number.isFinite(away)) return '';
-  if (home > away) return String(match.homeTeam || '').trim();
-  if (away > home) return String(match.awayTeam || '').trim();
-  return '';
+  return explicitWinner;
 }
 
 function getActualWinnerSide(match) {
