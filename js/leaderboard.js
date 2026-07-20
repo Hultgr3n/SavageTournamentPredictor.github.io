@@ -254,6 +254,11 @@ async function buildLeaderboard(myUid) {
     const finishedGroup = finishedMatches.filter(([, m]) => m.type === 'group').length;
     const finishedKnockout = finishedMatches.filter(([, m]) => m.type && m.type !== 'group').length;
 
+    // Use the score saved by knockout.js if available — it uses the same logic
+    // displayed on the bracket page and avoids stale-field issues in recalculation.
+    const storedKoPts = (typeof u.knockoutPts === 'number') ? u.knockoutPts : null;
+    const storedKoCorrect = (typeof u.knockoutCorrect === 'number') ? u.knockoutCorrect : null;
+
     for (const [matchId, m] of finishedMatches) {
       const pred = preds[matchId];
       if (!pred) continue;
@@ -270,13 +275,20 @@ async function buildLeaderboard(myUid) {
         if (pts === 3 && Number(pred.home) === Number(m.actualHome) && Number(pred.away) === Number(m.actualAway)) {
           exactScores++;
         }
-      } else if (isKnockout) {
+      } else if (isKnockout && storedKoPts === null) {
+        // Fall back to recalculation only when no stored value exists.
         const pts = scoreKnockoutPrediction(pred, m, matchId, preds, matches);
         if (pts === null) continue;
         totalPts += pts;
         knockoutPts += pts;
         if (pts > 0) knockoutCorrect++;
       }
+    }
+
+    if (storedKoPts !== null) {
+      knockoutPts = storedKoPts;
+      knockoutCorrect = storedKoCorrect;
+      totalPts += storedKoPts;
     }
 
     return {
