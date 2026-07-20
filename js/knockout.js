@@ -1186,7 +1186,7 @@ function updateDemoSummary() {
     clearTimeout(saveKnockoutScoreTimer);
     saveKnockoutScoreTimer = setTimeout(() => {
       db.collection('users').doc(currentUser.uid).set(
-        { knockoutPts: totalPts, knockoutCorrect: correct, knockoutFinished: finished },
+        { knockoutPts: totalPts, knockoutCorrect: correct, knockoutFinished: finished, knockoutLastUpdated: firebase.firestore.FieldValue.serverTimestamp() },
         { merge: true }
       ).catch(() => {});
     }, 1500);

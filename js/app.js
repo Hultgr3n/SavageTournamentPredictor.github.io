@@ -82,6 +82,10 @@ function requireAuth() {
       } catch (err) {
         console.error('Profile self-heal failed:', err);
       }
+      // Track last login time (fire-and-forget)
+      db.collection('users').doc(user.uid)
+        .set({ lastLogin: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+        .catch(err => console.warn('lastLogin update failed:', err));
       const snap = await db.collection('users').doc(user.uid).get();
       const data = snap.data() || {};
       resolve({ uid: user.uid, username: data.username || user.email, isAdmin: !!data.isAdmin });

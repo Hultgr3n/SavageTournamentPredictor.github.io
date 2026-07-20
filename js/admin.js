@@ -357,12 +357,23 @@ async function loadUsers() {
     const startedCount = usersWithStats.filter(u => u.hasStarted).length;
     const completedCount = usersWithStats.filter(u => u.isFullyComplete).length;
 
+
+
+    const fmtTs = (ts) => {
+      if (!ts) return '—';
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
+
+    const koVisitedCount = usersWithStats.filter(u => !!u.knockoutLastUpdated).length;
+
     document.getElementById('users-summary').innerHTML = `
       <div class="alert alert-info mb-0">
         <strong>Accounts:</strong> ${usersWithStats.length}
         &nbsp;|&nbsp; <strong>Started predictions:</strong> ${startedCount}
         &nbsp;|&nbsp; <strong>Completed all matches:</strong> ${completedCount}
         &nbsp;|&nbsp; <strong>Total matches loaded:</strong> ${totalMatches}
+        &nbsp;|&nbsp; <strong>KO stage visited:</strong> ${koVisitedCount}/${usersWithStats.length}
       </div>`;
 
     const rows = usersWithStats.map(u => `
@@ -372,6 +383,8 @@ async function loadUsers() {
         <td>${u.isAdmin ? '✅ Admin' : 'User'}</td>
         <td>${u.completedPredictions}/${totalMatches || 0}</td>
         <td>${u.hasStarted ? (u.isFullyComplete ? '✅ Complete' : '🟡 In progress') : '—'}</td>
+        <td>${fmtTs(u.lastLogin)}</td>
+        <td>${u.knockoutLastUpdated ? '✅ ' + fmtTs(u.knockoutLastUpdated) : '❌ Not visited'}</td>
         <td>
           <div class="d-flex gap-2">
             <button class="btn btn-sm btn-outline-${u.isAdmin ? 'danger' : 'success'}"
@@ -389,7 +402,7 @@ async function loadUsers() {
 
     document.getElementById('users-table').innerHTML = `
       <table class="table table-sm">
-        <thead><tr><th>Username</th><th>UID</th><th>Role</th><th>Predictions</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Username</th><th>UID</th><th>Role</th><th>Predictions</th><th>Status</th><th>Last Login</th><th>KO Updated</th><th>Actions</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
   } catch (err) {
